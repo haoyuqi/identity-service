@@ -25,6 +25,28 @@ secret store; never commit them. For local development over plain HTTP only,
 set `SESSION_SECURE_COOKIE=false` in `.env`; keep it enabled for HTTPS. The
 health endpoint is `/up`.
 
+## Administrator commands
+
+Create the first administrator from a controlled environment with:
+
+```sh
+php artisan identity:admin:bootstrap
+```
+
+To reset an account password, run:
+
+```sh
+php artisan identity:admin:reset-password
+```
+
+Both commands prompt for account details and read passwords through hidden
+prompts with confirmation. Passwords are not command-line arguments. Bootstrap
+normalizes the email address, refuses to create a second enabled administrator,
+and serializes concurrent attempts. Each successful account change and its
+audit record commit together. The commands display completion status only;
+they never display account credentials or password values. See [the architecture map](docs/architecture.md)
+for the implementation paths.
+
 ## Verification
 
 Run the checks used by the repository before proposing a change:
