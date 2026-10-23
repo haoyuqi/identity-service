@@ -1,8 +1,8 @@
 # Architecture and feature map
 
 Identity Service is a Laravel 13 application for private administrative account
-management. This reference describes the implemented baseline; it does not imply
-that account-management features beyond the current source are already present.
+management. This reference describes the behavior implemented in the current
+source.
 
 ## Boundaries
 
@@ -19,17 +19,24 @@ and public token authentication are outside this service's session-only scope.
 | --- | --- |
 | HTTP routes and bootstrap | [web routes](../routes/web.php), [application bootstrap](../bootstrap/app.php) |
 | Controller boundary | [base controller](../app/Http/Controllers/Controller.php) |
+| Administrator bootstrap and password reset | [bootstrap command](../app/Console/Commands/BootstrapAdministratorCommand.php), [password reset command](../app/Console/Commands/ResetAdministratorPasswordCommand.php), [user management service](../app/Services/UserManagementService.php) |
 | Accounts and roles | [User](../app/Models/User.php), [UserRole](../app/Enums/UserRole.php) |
 | Audit records | [AdminAuditLog](../app/Models/AdminAuditLog.php) |
 | Persistence schema | [initial migration](../database/migrations/0001_01_01_000000_create_users_table.php), [account and audit migration](../database/migrations/2026_10_23_000001_add_account_status_and_admin_audit_logs.php) |
 | Runtime configuration | [database](../config/database.php), [session](../config/session.php), [environment example](../.env.example) |
 | Test setup and database guard | [test case](../tests/TestCase.php), [database safety guard](../tests/Support/TestDatabaseGuard.php), [PHPUnit configuration](../phpunit.xml) |
-| Health and persistence tests | [health check](../tests/Feature/HealthCheckTest.php), [user model](../tests/Feature/UserModelTest.php) |
-| Schema and audit invariants | [account schema tests](../tests/Feature/AccountAuditSchemaTest.php), [audit model tests](../tests/Feature/AdminAuditLogTest.php) |
+| Health, persistence, schema, and audit tests | [health check](../tests/Feature/HealthCheckTest.php), [user model](../tests/Feature/UserModelTest.php), [account schema](../tests/Feature/AccountAuditSchemaTest.php), [audit model](../tests/Feature/AdminAuditLogTest.php), [administrator commands](../tests/Feature/AdministratorCommandsTest.php) |
 | Coverage gate | [coverage test](../tests/Unit/CoverageGateTest.php), [coverage verifier](../scripts/verify-coverage.php), [CI workflow](../.github/workflows/ci.yml), [Composer scripts](../composer.json) |
 
 Follow the actual source and tests when locating a feature. Keep this map focused
 on implemented behavior and update it when the code structure changes.
+
+The bootstrap command creates an administrator only when none is enabled. Both
+commands collect passwords through hidden interactive prompts and write their
+audit record in the same database transaction as the account change. Bootstrap
+uses a PostgreSQL transaction advisory lock to serialize first-admin creation;
+the administrator-disable workflow must reuse the lock key in
+[UserManagementService](../app/Services/UserManagementService.php).
 
 ## Runtime and data
 
