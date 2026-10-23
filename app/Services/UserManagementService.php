@@ -7,6 +7,7 @@ use App\Models\AdminAuditLog;
 use App\Models\User;
 use Closure;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Validator;
@@ -96,6 +97,98 @@ final class UserManagementService
         });
     }
 
+    public function createAccount(
+        string $name,
+        string $email,
+        UserRole $role,
+        string $password,
+        User $actor,
+    ): User {
+        $name = trim($name);
+        $email = mb_strtolower(trim($email));
+
+        $this->validateIdentity($name, $email, $password);
+
+        $connection = (new User)->getConnection();
+
+        try {
+            return $connection->transaction(function () use ($connection, $name, $email, $role, $password, $actor): User {
+                $connection->select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
+                $activeActor = $this->lockActiveAdministrator($connection, $actor);
+
+                $user = (new User)->setConnection($connection->getName());
+                $user->forceFill([
+                    'name' => $name,
+                    'email' => $email,
+                    'password' => $password,
+                    'role' => $role,
+                ]);
+                $user->save();
+
+                $this->writeAudit($connection, (int) $activeActor->getKey(), (int) $user->getKey(), 'admin.account_created');
+
+                return $user;
+            });
+        } catch (QueryException $exception) {
+            if ($exception->getCode() === '23505') {
+                throw ValidationException::withMessages([
+                    'email' => 'An account with this email already exists.',
+                ]);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function disableAccount(User $target, User $actor): User
+    {
+        $connection = (new User)->getConnection();
+
+        return $connection->transaction(function () use ($connection, $target, $actor): User {
+            $connection->select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
+            $activeActor = $this->lockActiveAdministrator($connection, $actor);
+            $account = User::on($connection->getName())
+                ->whereKey($target->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($account === null) {
+                throw new DomainException('The account no longer exists.');
+            }
+
+            if ($account->disabled_at !== null) {
+                throw new DomainException('The account is already disabled.');
+            }
+
+            if ($account->getRawOriginal('role') === UserRole::ADMIN->value) {
+                $enabledAdministrators = User::on($connection->getName())
+                    ->where('role', UserRole::ADMIN->value)
+                    ->whereNull('disabled_at')
+                    ->count();
+
+                if ($enabledAdministrators <= 1) {
+                    throw new DomainException('The last enabled administrator cannot be disabled.');
+                }
+            }
+
+            if ($activeActor->is($account)) {
+                throw new DomainException('Administrators cannot disable their own account.');
+            }
+
+            $account->disabled_at = now()->utc();
+            $account->save();
+
+            $this->writeAudit(
+                $connection,
+                (int) $activeActor->getKey(),
+                (int) $account->getKey(),
+                'admin.account_disabled',
+            );
+
+            return $account;
+        });
+    }
+
     private function validateIdentity(string $name, string $email, string $password): void
     {
         Validator::make(
@@ -108,6 +201,22 @@ final class UserManagementService
         )->validate();
     }
 
+    private function lockActiveAdministrator(Connection $connection, User $actor): User
+    {
+        $activeActor = User::on($connection->getName())
+            ->whereKey($actor->getKey())
+            ->lockForUpdate()
+            ->first();
+
+        if ($activeActor === null
+            || $activeActor->getRawOriginal('role') !== UserRole::ADMIN->value
+            || $activeActor->disabled_at !== null) {
+            throw new AuthorizationException('An enabled administrator is required.');
+        }
+
+        return $activeActor;
+    }
+
     /**
      * @return array<int, string|Closure(string, mixed, Closure(string): void): void>
      */
@@ -118,7 +227,7 @@ final class UserManagementService
             'string',
             'min:12',
             static function (string $attribute, mixed $value, Closure $fail): void {
-                if (strlen((string) $value) > 72) {
+                if (is_string($value) && strlen($value) > 72) {
                     $fail('The password must not exceed 72 bytes.');
                 }
             },
