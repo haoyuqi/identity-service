@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+          extensions: pdo_pgsql, redis
+          tools: composer:v2
+
+      - name: Validate Composer configuration
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Check actual PHP platform requirements
+        run: composer check-platform-reqs
+
+      - name: Check formatting
+        run: composer format:check
+
+      - name: Run static analysis
+        run: composer analyse
+
+      - name: Audit dependencies
+        run: composer audit --locked --no-interaction
+
+  tests:
+    name: Tests and 100% application line coverage
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: identity_service_admin
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          TZ: UTC
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U identity_service_admin -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: testing
+      TEST_DB_CONNECTION: pgsql
+      TEST_DB_HOST: 127.0.0.1
+      TEST_DB_PORT: '5432'
+      TEST_DB_DATABASE: identity_service_test
+      TEST_DB_USERNAME: identity_service_test
+      TEST_DB_PASSWORD: ''
+      TEST_DB_URL: ''
+      PGTZ: UTC
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: pcov
+          extensions: pdo_pgsql, redis
+          tools: composer:v2
+
+      - name: Create the isolated test role
+        run: |
+          psql --host=127.0.0.1 --username=identity_service_admin --dbname=postgres --set=ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE identity_service_test LOGIN CREATEDB;
+          SQL
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Check actual PHP platform requirements
+        run: composer check-platform-reqs
+
+      - name: Run tests and generate coverage
+        run: |
+          mkdir -p build
+          php artisan test --coverage --min=100 --coverage-clover=build/coverage.xml
+
+      - name: Enforce complete application line coverage
+        run: php scripts/verify-coverage.php build/coverage.xml
+
+      - name: Upload coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: application-line-coverage
+          path: build/coverage.xml
+          if-no-files-found: ignore
+          retention-days: 7
