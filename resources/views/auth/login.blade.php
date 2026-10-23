@@ -16,7 +16,7 @@
         <form method="post" action="{{ route('login.store') }}">
             @csrf
             <label for="email">Email</label>
-            <input id="email" name="email" type="email" value="{{ old('email') }}" required autocomplete="username">
+            <input id="email" name="email" type="email" value="{{ is_string(old('email')) ? old('email') : '' }}" required autocomplete="username">
 
             <label for="password">Password</label>
             <input id="password" name="password" type="password" required autocomplete="current-password">

@@ -25,6 +25,7 @@ and public token authentication are outside this service's session-only scope.
 | Persistence schema | [initial migration](../database/migrations/0001_01_01_000000_create_users_table.php), [account and audit migration](../database/migrations/2026_10_23_000001_add_account_status_and_admin_audit_logs.php) |
 | Administrator session login | [session controller](../app/Http/Controllers/SessionController.php), [authentication service](../app/Services/AuthenticationService.php), [login request](../app/Http/Requests/LoginRequest.php), [active administrator middleware](../app/Http/Middleware/EnsureActiveAdministrator.php) |
 | Session pages | [login](../resources/views/auth/login.blade.php), [dashboard](../resources/views/admin/dashboard.blade.php) |
+| Administrative account pages and actions | [account routes](../routes/web.php), [user controller](../app/Http/Controllers/Admin/UserController.php), [user policy](../app/Policies/UserPolicy.php), [account service](../app/Services/UserManagementService.php), [account views](../resources/views/admin/users) |
 | Runtime configuration | [database](../config/database.php), [session](../config/session.php), [environment example](../.env.example) |
 | Test setup and database guard | [test case](../tests/TestCase.php), [database safety guard](../tests/Support/TestDatabaseGuard.php), [PHPUnit configuration](../phpunit.xml) |
 | Health, persistence, schema, and audit tests | [health check](../tests/Feature/HealthCheckTest.php), [user model](../tests/Feature/UserModelTest.php), [account schema](../tests/Feature/AccountAuditSchemaTest.php), [audit model](../tests/Feature/AdminAuditLogTest.php), [administrator commands](../tests/Feature/AdministratorCommandsTest.php) |
@@ -79,6 +80,17 @@ password hash in the Redis-backed session. Each administrator request checks
 that marker and delegates to Laravel's `auth.session` middleware so password
 changes invalidate existing sessions. Disabled accounts and non-admin users
 are logged out. Logout is a CSRF-protected POST that invalidates the session.
+
+Active administrators can list, create, and view accounts under `/admin/users`.
+Account creation accepts an explicit `admin` or `member` role and an initial
+password; the form validates and normalizes names and email addresses, and
+passwords are never flashed back after validation errors. Account disabling is
+a CSRF-protected PATCH action. The controller authorizes requests with
+`UserPolicy`, while `UserManagementService` rechecks the acting administrator
+inside the transaction-scoped shared advisory lock, protects the final enabled
+administrator, and commits each account change with its audit record. Account
+pages display status and target-account audit history; they do not expose
+password hashes or provide role changes, deletion, or re-enabling.
 
 ## Documentation maintenance
 

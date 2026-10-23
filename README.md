@@ -54,6 +54,16 @@ can open the protected `/admin` page. Sessions are stored in Redis; changing an
 account password invalidates its existing sessions. Sign out with the
 dashboard's POST form.
 
+## Account administration
+
+Active administrators can manage accounts at `/admin/users`: browse the
+paginated account list, create an account with an explicit role and initial
+password, view account details and audit history, and disable another account.
+The service prevents disabling the current administrator and the last enabled
+administrator. Account creation and disabling are recorded atomically in the
+administrative audit log. Role changes, account deletion, re-enabling, and
+public registration are not available in this version.
+
 ## Verification
 
 Run the checks used by the repository before proposing a change:

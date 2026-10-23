@@ -9,6 +9,7 @@
     <main>
         <h1>Administration</h1>
         <p>Administrator session is active.</p>
+        <p><a href="{{ route('admin.users.index') }}">Manage accounts</a></p>
         <form method="post" action="{{ route('admin.logout') }}">
             @csrf
             <button type="submit">Sign out</button>
