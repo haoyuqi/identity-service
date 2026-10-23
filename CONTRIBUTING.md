@@ -84,6 +84,14 @@ The guard creates only `identity_service_test`, assigns ownership to
 Laravel tests using `RefreshDatabase` then apply migrations and isolate database
 changes.
 
+Administrator session feature tests require a Redis test namespace or
+dedicated Redis service. Set `REDIS_TEST_HOST`, `REDIS_TEST_PORT`, and
+`REDIS_TEST_DATABASE` to its connection; optional credentials use
+`REDIS_TEST_USERNAME` and `REDIS_TEST_PASSWORD`. A local development Redis may
+be shared only when tests use a unique database or key namespace and it is not
+used by production. Each test gets a random session key prefix; tests verify
+their own session keys and TTLs, allow keys to expire, and never flush Redis.
+
 ### Safety checks
 
 The guard checks the PostgreSQL server version (18.x), connection, host, port,

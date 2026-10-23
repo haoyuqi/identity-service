@@ -47,6 +47,13 @@ audit record commit together. The commands display completion status only;
 they never display account credentials or password values. See [the architecture map](docs/architecture.md)
 for the implementation paths.
 
+## Administrator login
+
+Administrators sign in at `/admin/login`. Only enabled administrator accounts
+can open the protected `/admin` page. Sessions are stored in Redis; changing an
+account password invalidates its existing sessions. Sign out with the
+dashboard's POST form.
+
 ## Verification
 
 Run the checks used by the repository before proposing a change:
