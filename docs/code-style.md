@@ -8,7 +8,7 @@ types declarations are optional and are not a project-wide requirement.
 
 - Classes and matching filenames use `PascalCase`.
 - Application variables, parameters, properties, and methods use `camelCase`.
-- Constants use `UPPER_SNAKE_CASE`.
+- Constants and backed enum cases use `UPPER_SNAKE_CASE`.
 - Database columns, configuration keys, and structured log keys use
   `snake_case`.
 - Preserve names required by Laravel, PHP interfaces, and external contracts.
