@@ -9,8 +9,8 @@ use App\Models\User;
 use Closure;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -26,12 +26,9 @@ final class UserManagementService
 
     public function __construct()
     {
-        // Read the driver from configuration rather than opening a connection: the shared
-        // advisory lock below is PostgreSQL SQL and must fail closed on any other driver.
-        $connection = (string) config('database.default');
-        $driver = config('database.connections.'.$connection.'.driver');
-
-        if ($driver !== 'pgsql') {
+        // The shared advisory lock below is PostgreSQL SQL, so fail closed on any other
+        // driver. Reading the driver does not open a database connection.
+        if (DB::connection()->getDriverName() !== 'pgsql') {
             throw new RuntimeException('The account service requires a PostgreSQL connection.');
         }
     }
@@ -44,13 +41,11 @@ final class UserManagementService
         $this->validateIdentity($name, $email, $password);
         $passwordHash = Hash::make($password);
 
-        $connection = (new User)->getConnection();
-
         try {
-            return $connection->transaction(function () use ($connection, $name, $email, $passwordHash): User {
-                $connection->select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
+            return DB::transaction(function () use ($name, $email, $passwordHash): User {
+                DB::select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
 
-                $existingAdmin = User::on($connection->getName())
+                $existingAdmin = User::query()
                     ->where('role', UserRole::ADMIN->value)
                     ->whereNull('disabled_at')
                     ->exists();
@@ -59,7 +54,7 @@ final class UserManagementService
                     throw new DomainException('An enabled administrator already exists.');
                 }
 
-                $user = (new User)->setConnection($connection->getName());
+                $user = new User;
                 $user->forceFill([
                     'name' => $name,
                     'email' => $email,
@@ -68,7 +63,7 @@ final class UserManagementService
                 ]);
                 $user->save();
 
-                $this->writeAudit($connection, null, (int) $user->getKey(), AuditAction::BOOTSTRAP);
+                $this->writeAudit(null, (int) $user->getKey(), AuditAction::BOOTSTRAP);
 
                 return $user;
             });
@@ -96,10 +91,8 @@ final class UserManagementService
         )->validate();
         $passwordHash = Hash::make($password);
 
-        $connection = (new User)->getConnection();
-
-        return $connection->transaction(function () use ($connection, $email, $passwordHash): User {
-            $user = User::on($connection->getName())->where('email', $email)->first();
+        return DB::transaction(function () use ($email, $passwordHash): User {
+            $user = User::query()->where('email', $email)->first();
 
             if ($user === null) {
                 throw new DomainException('No account was found for that email address.');
@@ -108,7 +101,7 @@ final class UserManagementService
             $user->password = $passwordHash;
             $user->save();
 
-            $this->writeAudit($connection, null, (int) $user->getKey(), AuditAction::PASSWORD_RESET);
+            $this->writeAudit(null, (int) $user->getKey(), AuditAction::PASSWORD_RESET);
 
             return $user;
         });
@@ -127,14 +120,12 @@ final class UserManagementService
         $this->validateIdentity($name, $email, $password);
         $passwordHash = Hash::make($password);
 
-        $connection = (new User)->getConnection();
-
         try {
-            return $connection->transaction(function () use ($connection, $name, $email, $role, $passwordHash, $actor): User {
-                $connection->select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
-                $activeActor = $this->lockActiveAdministrator($connection, $actor);
+            return DB::transaction(function () use ($name, $email, $role, $passwordHash, $actor): User {
+                DB::select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
+                $activeActor = $this->lockActiveAdministrator($actor);
 
-                $user = (new User)->setConnection($connection->getName());
+                $user = new User;
                 $user->forceFill([
                     'name' => $name,
                     'email' => $email,
@@ -143,7 +134,7 @@ final class UserManagementService
                 ]);
                 $user->save();
 
-                $this->writeAudit($connection, (int) $activeActor->getKey(), (int) $user->getKey(), AuditAction::ACCOUNT_CREATED);
+                $this->writeAudit((int) $activeActor->getKey(), (int) $user->getKey(), AuditAction::ACCOUNT_CREATED);
 
                 return $user;
             });
@@ -160,12 +151,10 @@ final class UserManagementService
 
     public function disableAccount(User $target, User $actor): User
     {
-        $connection = (new User)->getConnection();
-
-        return $connection->transaction(function () use ($connection, $target, $actor): User {
-            $connection->select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
-            $activeActor = $this->lockActiveAdministrator($connection, $actor);
-            $account = User::on($connection->getName())
+        return DB::transaction(function () use ($target, $actor): User {
+            DB::select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
+            $activeActor = $this->lockActiveAdministrator($actor);
+            $account = User::query()
                 ->whereKey($target->getKey())
                 ->lockForUpdate()
                 ->first();
@@ -179,7 +168,7 @@ final class UserManagementService
             }
 
             if ($account->getRawOriginal('role') === UserRole::ADMIN->value) {
-                $enabledAdministrators = User::on($connection->getName())
+                $enabledAdministrators = User::query()
                     ->where('role', UserRole::ADMIN->value)
                     ->whereNull('disabled_at')
                     ->count();
@@ -197,7 +186,6 @@ final class UserManagementService
             $account->save();
 
             $this->writeAudit(
-                $connection,
                 (int) $activeActor->getKey(),
                 (int) $account->getKey(),
                 AuditAction::ACCOUNT_DISABLED,
@@ -219,9 +207,9 @@ final class UserManagementService
         )->validate();
     }
 
-    private function lockActiveAdministrator(Connection $connection, User $actor): User
+    private function lockActiveAdministrator(User $actor): User
     {
-        $activeActor = User::on($connection->getName())
+        $activeActor = User::query()
             ->whereKey($actor->getKey())
             ->lockForUpdate()
             ->first();
@@ -252,9 +240,9 @@ final class UserManagementService
         ];
     }
 
-    private function writeAudit(Connection $connection, ?int $actorId, int $targetUserId, AuditAction $action): void
+    private function writeAudit(?int $actorId, int $targetUserId, AuditAction $action): void
     {
-        $auditLog = (new AdminAuditLog)->setConnection($connection->getName());
+        $auditLog = new AdminAuditLog;
         $auditLog->fill([
             'actor_id' => $actorId,
             'target_user_id' => $targetUserId,

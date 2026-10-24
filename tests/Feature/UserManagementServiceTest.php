@@ -98,8 +98,14 @@ final class UserManagementServiceTest extends TestCase
 
     public function test_the_service_refuses_a_non_postgresql_connection(): void
     {
-        config(['database.connections.non_postgres' => ['driver' => 'sqlite']]);
+        config(['database.connections.non_postgres' => [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ]]);
         config(['database.default' => 'non_postgres']);
+        DB::purge('non_postgres');
 
         try {
             new UserManagementService;
@@ -108,6 +114,7 @@ final class UserManagementServiceTest extends TestCase
             self::assertSame('The account service requires a PostgreSQL connection.', $exception->getMessage());
         } finally {
             config(['database.default' => 'testing']);
+            DB::purge('non_postgres');
             config()->offsetUnset('database.connections.non_postgres');
         }
     }
