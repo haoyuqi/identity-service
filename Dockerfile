@@ -14,6 +14,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
+COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
 
 WORKDIR /var/www/html
 
@@ -30,7 +31,6 @@ COPY . .
 
 RUN composer dump-autoload --no-dev --classmap-authoritative --no-scripts \
     && php artisan package:discover --ansi \
-    && printf '<VirtualHost *:8080>\n    ServerName localhost\n    DocumentRoot /var/www/html/public\n    <Directory /var/www/html/public>\n        AllowOverride All\n        Require all granted\n    </Directory>\n    ErrorLog /proc/self/fd/2\n    LogFormat "%h %l %u %t \\\"%m %>s\\\" %D" privacy_safe\n    CustomLog /proc/self/fd/1 privacy_safe\n</VirtualHost>\n' > /etc/apache2/sites-available/000-default.conf \
     && sed -i 's#^PidFile .*#PidFile /tmp/apache2.pid#' /etc/apache2/apache2.conf \
     && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs \
     && chown -R www-data:www-data storage bootstrap/cache /var/run/apache2 /var/lock/apache2 /var/log/apache2
