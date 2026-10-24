@@ -127,6 +127,40 @@ final class AccountAuditSchemaTest extends TestCase
         $migration->up();
     }
 
+    public function test_audit_action_constraint_migration_rolls_back_and_reapplies(): void
+    {
+        $migration = require database_path('migrations/2026_10_24_000001_constrain_admin_audit_actions.php');
+        $target = User::factory()->create();
+
+        $migration->down();
+        $this->assertFalse($this->auditActionConstraintExists());
+
+        // Without the constraint the database accepts any action value.
+        DB::table('admin_audit_logs')->insert([
+            'actor_id' => null,
+            'target_user_id' => $target->id,
+            'action' => 'admin.unknown_action',
+        ]);
+        $this->assertDatabaseHas('admin_audit_logs', ['action' => 'admin.unknown_action']);
+        DB::table('admin_audit_logs')->delete();
+
+        $migration->up();
+        $this->assertTrue($this->auditActionConstraintExists());
+
+        try {
+            DB::transaction(static function () use ($target): void {
+                DB::table('admin_audit_logs')->insert([
+                    'actor_id' => null,
+                    'target_user_id' => $target->id,
+                    'action' => 'admin.unknown_action',
+                ]);
+            });
+            self::fail('Reapplying the migration must restore the constraint.');
+        } catch (QueryException) {
+            $this->assertDatabaseCount('admin_audit_logs', 0);
+        }
+    }
+
     public function test_rollback_removes_new_schema_and_preserves_existing_account_data(): void
     {
         $user = User::factory()->create(['email' => 'kept@example.test']);
@@ -146,6 +180,13 @@ final class AccountAuditSchemaTest extends TestCase
         $this->assertDatabaseHas('password_reset_tokens', ['email' => 'kept@example.test']);
 
         $migration->up();
+    }
+
+    private function auditActionConstraintExists(): bool
+    {
+        return DB::table('pg_constraint')
+            ->where('conname', 'admin_audit_logs_action_check')
+            ->exists();
     }
 
     private function userRow(string $email, string $role = 'member'): array

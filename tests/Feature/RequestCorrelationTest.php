@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\SafeExceptionHandler;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Mockery;
@@ -73,5 +75,27 @@ final class RequestCorrelationTest extends TestCase
         $response = $this->withHeader('X-Request-Id', 'fallback-request-9')->get('/missing-route');
 
         $response->assertNotFound()->assertHeader('X-Request-Id', 'fallback-request-9');
+    }
+
+    public function test_reports_settled_outside_the_middleware_stack_still_carry_the_harmless_identifier(): void
+    {
+        Log::spy();
+
+        $request = Request::create('/outside-the-stack', 'GET');
+        $request->headers->set('X-Request-Id', 'external-stack-caller');
+
+        app()->instance('request', $request);
+
+        app(SafeExceptionHandler::class)->report(new RuntimeException('unreported secret'));
+
+        Log::shouldHaveReceived('error')->once()->with(
+            'HTTP request failed.',
+            Mockery::on(function (array $context): bool {
+                $this->assertSame('external-stack-caller', $context['request_id']);
+                $this->assertStringNotContainsString('unreported secret', json_encode($context, JSON_THROW_ON_ERROR));
+
+                return true;
+            }),
+        );
     }
 }

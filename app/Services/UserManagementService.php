@@ -246,7 +246,7 @@ final class UserManagementService
         $auditLog->fill([
             'actor_id' => $actorId,
             'target_user_id' => $targetUserId,
-            'action' => $action->value,
+            'action' => $action,
         ]);
         $auditLog->save();
     }

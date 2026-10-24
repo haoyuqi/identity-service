@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 use Tests\TestCase;
+use ValueError;
 
 final class AdminAuditLogTest extends TestCase
 {
@@ -29,7 +30,7 @@ final class AdminAuditLogTest extends TestCase
         $this->assertTrue($event->actor->is($actor));
         $this->assertTrue($event->target->is($target));
         $this->assertInstanceOf(Carbon::class, $event->created_at);
-        $this->assertSame(AuditAction::ACCOUNT_DISABLED->value, $event->action);
+        self::assertSame(AuditAction::ACCOUNT_DISABLED, $event->action);
     }
 
     public function test_admin_audit_log_created_at_preserves_non_utc_instants(): void
@@ -61,10 +62,19 @@ final class AdminAuditLogTest extends TestCase
         $this->assertTrue($event->target->is($target));
     }
 
+    public function test_the_model_rejects_an_unknown_audit_action(): void
+    {
+        $log = new AdminAuditLog;
+        $log->target_user_id = User::factory()->create()->id;
+
+        $this->expectException(ValueError::class);
+        $log->action = 'admin.unknown_action';
+    }
+
     public function test_admin_audit_logs_cannot_be_updated(): void
     {
         $event = $this->createEvent();
-        $event->action = AuditAction::PASSWORD_RESET->value;
+        $event->action = AuditAction::PASSWORD_RESET;
 
         $this->expectException(LogicException::class);
         $event->save();

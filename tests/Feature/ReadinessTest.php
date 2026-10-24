@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
 
 final class ReadinessTest extends TestCase
@@ -28,7 +29,30 @@ final class ReadinessTest extends TestCase
         config([
             'database.redis.readiness_test' => $connection,
             'session.connection' => 'readiness_test',
+            // Production runs Redis-backed sessions, and a readiness probe must not
+            // depend on that stateful middleware stack.
+            'session.driver' => 'redis',
+            'session.store' => 'redis',
+            'session.prefix' => 'identity-service-readiness-test:'.bin2hex(random_bytes(8)).':',
         ]);
+
+        app('session')->forgetDrivers();
+    }
+
+    public function test_readiness_does_not_create_a_session(): void
+    {
+        $prefix = config('session.prefix');
+        $redis = Redis::connection('readiness_test');
+        $before = count($redis->keys($prefix.'*'));
+
+        $response = $this->get(route('ready'));
+
+        self::assertSame($before, count($redis->keys($prefix.'*')));
+        self::assertNull($response->headers->get('Set-Cookie'));
+
+        foreach ($redis->keys($prefix.'*') as $key) {
+            $redis->del($key);
+        }
     }
 
     public function test_readiness_reports_available_dependencies(): void

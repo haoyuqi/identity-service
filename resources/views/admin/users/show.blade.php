@@ -42,7 +42,7 @@
         <h2>Account history</h2>
         <ul>
             @forelse ($auditLogs as $auditLog)
-                <li>{{ $auditLog->created_at?->toIso8601String() ?? 'Unknown' }} — {{ $auditLog->action }}</li>
+                <li>{{ $auditLog->created_at?->toIso8601String() ?? 'Unknown' }} — {{ $auditLog->action?->value ?? 'unknown' }}</li>
             @empty
                 <li>No account history recorded.</li>
             @endforelse

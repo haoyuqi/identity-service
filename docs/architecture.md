@@ -26,7 +26,7 @@ and public token authentication are outside this service's session-only scope.
 | Accounts and roles | [User](../app/Models/User.php), [UserRole](../app/Enums/UserRole.php) |
 | Audited operations | [AuditAction](../app/Enums/AuditAction.php) |
 | Audit records | [AdminAuditLog](../app/Models/AdminAuditLog.php) |
-| Persistence schema | [initial migration](../database/migrations/0001_01_01_000000_create_users_table.php), [account and audit migration](../database/migrations/2026_10_23_000001_add_account_status_and_admin_audit_logs.php) |
+| Persistence schema | [initial migration](../database/migrations/0001_01_01_000000_create_users_table.php), [account and audit migration](../database/migrations/2026_10_23_000001_add_account_status_and_admin_audit_logs.php), [audit action constraint migration](../database/migrations/2026_10_24_000001_constrain_admin_audit_actions.php) |
 | Administrator session login | [session controller](../app/Http/Controllers/SessionController.php), [authentication service](../app/Services/AuthenticationService.php), [login request](../app/Http/Requests/LoginRequest.php), [active administrator middleware](../app/Http/Middleware/EnsureActiveAdministrator.php) |
 | Session pages | [login](../resources/views/auth/login.blade.php), [dashboard](../resources/views/admin/dashboard.blade.php) |
 | Administrative account pages and actions | [account routes](../routes/web.php), [user controller](../app/Http/Controllers/Admin/UserController.php), [user policy](../app/Policies/UserPolicy.php), [account service](../app/Services/UserManagementService.php), [account views](../resources/views/admin/users) |
@@ -116,10 +116,18 @@ database failures return a generic 500 response even when debug mode is
 enabled; Redis client failures return a generic 503 in every environment.
 HTTP exceptions retain their status and safe protocol headers while returning
 generic bodies. Validation, authentication, and redirect responses retain
-Laravel's response handling. Error reports record the exception class and code
-plus a matched route template when available. They do not include exception
-messages, traces, SQL bindings, request values, query strings, cookies, or
+Laravel's response handling. Error reports record the exception class and code,
+the chain of wrapped exception classes, any PostgreSQL SQLSTATE, the request
+identifier, and a matched route template when available. The identifier is
+resolved on demand, so a failure reported before the middleware stack ran is
+logged with the same value its response carries. They do not include exception
+messages, traces, SQL, bindings, request values, query strings, cookies, or
 authorization headers.
+
+The readiness probe is registered outside the `web` middleware group. It reports
+dependency state without a session, so with Redis-backed sessions a probe neither
+writes a session or cookie nor loses its own 503 when Redis is the unavailable
+dependency.
 
 ## Documentation maintenance
 

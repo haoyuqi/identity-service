@@ -25,7 +25,6 @@ final class AssignRequestId
     public function handle(Request $request, Closure $next): Response
     {
         $requestId = $this->requestId($request);
-        $request->attributes->set(self::ATTRIBUTE, $requestId);
 
         $response = $next($request);
         $response->headers->set(self::HEADER, $requestId);
@@ -40,7 +39,13 @@ final class AssignRequestId
         return $response;
     }
 
-    private function requestId(Request $request): string
+    /**
+     * Resolve the identifier for a request, storing it so later callers reuse it.
+     *
+     * A failure reported before this middleware runs would otherwise be logged without
+     * the identifier that its response carries.
+     */
+    public function requestId(Request $request): string
     {
         $existing = $request->attributes->get(self::ATTRIBUTE);
 

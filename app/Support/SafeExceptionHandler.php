@@ -2,8 +2,8 @@
 
 namespace App\Support;
 
+use App\Http\Middleware\AssignRequestId;
 use Illuminate\Auth\AuthenticationException;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +24,9 @@ final class SafeExceptionHandler
      */
     public function report(Throwable $exception): bool
     {
-        $requestId = request()->attributes->get('request_id');
+        // Falls back to resolving the identifier when the failure happened before the
+        // middleware ran, so the report still matches the X-Request-Id on the response.
+        $requestId = app(AssignRequestId::class)->requestId(request());
         $context = [
             'exception_class' => $exception::class,
             'exception_code' => $exception->getCode(),
@@ -32,7 +34,7 @@ final class SafeExceptionHandler
             'sqlstate' => $this->sqlState($exception),
         ];
 
-        if (is_string($requestId) && $requestId !== '') {
+        if ($requestId !== '') {
             $context['request_id'] = $requestId;
         }
 
@@ -84,17 +86,18 @@ final class SafeExceptionHandler
 
     private function sqlState(Throwable $exception): ?string
     {
+        // QueryException is a PDOException whose errorInfo mirrors the driver's own, and it
+        // is null when the wrapped failure was not a PDO error. Fall back to the exception
+        // code and keep walking the chain rather than reporting nothing.
         for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
-            if ($current instanceof QueryException) {
-                $state = $current->errorInfo[0] ?? null;
-
-                return is_string($state) && $state !== '' ? $state : null;
+            if (! $current instanceof PDOException) {
+                continue;
             }
 
-            if ($current instanceof PDOException) {
-                $state = $current->errorInfo[0] ?? $current->getCode();
+            $state = $current->errorInfo[0] ?? $current->getCode();
 
-                return is_string($state) && $state !== '' ? $state : null;
+            if (is_string($state) && $state !== '' && $state !== '0') {
+                return $state;
             }
         }
 

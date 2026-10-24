@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Support\SafeExceptionHandler;
+use Exception;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Debug\ExceptionHandler as ExceptionHandlerContract;
@@ -16,6 +17,7 @@ use Illuminate\Testing\TestResponse;
 use Illuminate\Validation\ValidationException;
 use Mockery;
 use PDOException;
+use ReflectionProperty;
 use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
@@ -259,6 +261,41 @@ final class SecurityResponsesTest extends TestCase
                 $serialized = json_encode($context, JSON_THROW_ON_ERROR);
 
                 foreach (['driver_detail_marker', 'connection_failure_marker'] as $marker) {
+                    $this->assertStringNotContainsString($marker, $serialized);
+                }
+
+                return true;
+            }),
+        );
+    }
+
+    public function test_query_failures_without_error_info_fall_back_to_the_exception_code(): void
+    {
+        Log::spy();
+
+        Route::get('/security-code-only', static function (): never {
+            // A driver failure that carries its SQLSTATE in the exception code only, which
+            // leaves QueryException::errorInfo null.
+            $driverException = new PDOException('code_only_marker', 0);
+            $driverException->errorInfo = null;
+
+            $codeProperty = new ReflectionProperty(Exception::class, 'code');
+            $codeProperty->setValue($driverException, '23503');
+
+            throw new QueryException('pgsql', 'insert into users values (?)', ['binding_marker'], $driverException);
+        });
+
+        $this->useProductionEnvironment();
+        $this->get('/security-code-only')->assertStatus(500);
+
+        Log::shouldHaveReceived('error')->once()->with(
+            'HTTP request failed.',
+            Mockery::on(function (array $context): bool {
+                $this->assertSame('23503', $context['sqlstate']);
+
+                $serialized = json_encode($context, JSON_THROW_ON_ERROR);
+
+                foreach (['code_only_marker', 'binding_marker'] as $marker) {
                     $this->assertStringNotContainsString($marker, $serialized);
                 }
 
