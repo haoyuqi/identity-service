@@ -94,6 +94,12 @@ their own session keys and TTLs, allow keys to expire, and never flush Redis.
 
 ### Safety checks
 
+Concurrency tests use independent PHP processes against the same isolated test
+database. Each worker runs the database safety guard before writing. A PostgreSQL
+advisory-lock barrier verifies simultaneous bootstrap and administrator-disable
+attempts, with bounded waits and worker cleanup. Run the suite serially when
+multiple checkouts share this database; do not run parallel migrations against it.
+
 The guard checks the PostgreSQL server version (18.x), connection, host, port,
 database, and role before test setup. The only permitted test hosts are
 `postgres` and `127.0.0.1`; the port is `5432`. The role and database name must

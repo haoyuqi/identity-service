@@ -4,12 +4,12 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Services\UserManagementService;
 use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -182,7 +182,7 @@ final class AdministratorAuthenticationTest extends TestCase
         ]);
         $cookie = $this->sessionCookie($login);
 
-        $user->forceFill(['password' => Hash::make('new-password')])->save();
+        app(UserManagementService::class)->resetPassword($user->email, 'new-password');
 
         $this->resetBrowserRequestState();
         $this->withCookie(config('session.cookie'), $cookie)
@@ -252,7 +252,8 @@ final class AdministratorAuthenticationTest extends TestCase
             'password' => 'correct-password',
         ]);
         $cookie = $this->sessionCookie($login);
-        $administrator->forceFill(['disabled_at' => now()])->save();
+        $otherAdministrator = User::factory()->admin()->create();
+        app(UserManagementService::class)->disableAccount($administrator, $otherAdministrator);
 
         $this->resetBrowserRequestState();
         $this->withCookie(config('session.cookie'), $cookie)

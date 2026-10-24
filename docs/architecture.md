@@ -109,6 +109,12 @@ authorization headers.
 
 ## Documentation maintenance
 
+The [concurrency tests](../tests/Feature/AdministratorConcurrencyTest.php) use
+independent guarded workers to verify first-administrator creation and mutual
+administrator disabling under actual PostgreSQL lock contention. The
+[session tests](../tests/Feature/AdministratorAuthenticationTest.php) exercise
+Redis cookies after password reset and account disablement through the service.
+
 Keep each fact in one owning reference and link to it elsewhere. Update this
 document when implemented responsibilities or execution paths change. The
 [code style](code-style.md) owns naming and readability rules;
