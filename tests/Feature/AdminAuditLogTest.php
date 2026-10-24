@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AuditAction;
 use App\Models\AdminAuditLog;
 use App\Models\User;
 use Illuminate\Database\QueryException;
@@ -22,13 +23,13 @@ final class AdminAuditLogTest extends TestCase
         $event = AdminAuditLog::create([
             'actor_id' => $actor->id,
             'target_user_id' => $target->id,
-            'action' => 'user.disabled',
+            'action' => AuditAction::ACCOUNT_DISABLED->value,
         ]);
 
         $this->assertTrue($event->actor->is($actor));
         $this->assertTrue($event->target->is($target));
         $this->assertInstanceOf(Carbon::class, $event->created_at);
-        $this->assertSame('user.disabled', $event->action);
+        $this->assertSame(AuditAction::ACCOUNT_DISABLED->value, $event->action);
     }
 
     public function test_admin_audit_log_created_at_preserves_non_utc_instants(): void
@@ -36,7 +37,7 @@ final class AdminAuditLogTest extends TestCase
         $target = User::factory()->create();
         $log = new AdminAuditLog;
         $log->target_user_id = $target->id;
-        $log->action = 'user.created';
+        $log->action = AuditAction::ACCOUNT_CREATED->value;
         $log->created_at = Carbon::parse('2026-10-20 12:30:00+09:00');
         $log->save();
 
@@ -53,7 +54,7 @@ final class AdminAuditLogTest extends TestCase
         $target = User::factory()->create();
         $event = AdminAuditLog::create([
             'target_user_id' => $target->id,
-            'action' => 'user.provisioned',
+            'action' => AuditAction::BOOTSTRAP->value,
         ]);
 
         $this->assertNull($event->actor);
@@ -63,7 +64,7 @@ final class AdminAuditLogTest extends TestCase
     public function test_admin_audit_logs_cannot_be_updated(): void
     {
         $event = $this->createEvent();
-        $event->action = 'user.changed';
+        $event->action = AuditAction::PASSWORD_RESET->value;
 
         $this->expectException(LogicException::class);
         $event->save();
@@ -92,7 +93,7 @@ final class AdminAuditLogTest extends TestCase
         return AdminAuditLog::create([
             'actor_id' => $actor?->id,
             'target_user_id' => User::factory()->create()->id,
-            'action' => 'user.created',
+            'action' => AuditAction::ACCOUNT_CREATED->value,
         ]);
     }
 }

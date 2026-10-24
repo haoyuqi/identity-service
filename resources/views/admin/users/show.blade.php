@@ -26,9 +26,9 @@
 
         <dl>
             <dt>Email</dt><dd>{{ $user->email }}</dd>
-            <dt>Role</dt><dd>{{ $user->role->value }}</dd>
+            <dt>Role</dt><dd>{{ $user->role?->value ?? 'Unknown' }}</dd>
             <dt>Status</dt><dd>{{ $user->disabled_at === null ? 'Active' : 'Disabled' }}</dd>
-            <dt>Created</dt><dd>{{ $user->created_at->toIso8601String() }}</dd>
+            <dt>Created</dt><dd>{{ $user->created_at?->toIso8601String() ?? 'Unknown' }}</dd>
         </dl>
 
         @can('disable', $user)
@@ -42,7 +42,7 @@
         <h2>Account history</h2>
         <ul>
             @forelse ($auditLogs as $auditLog)
-                <li>{{ $auditLog->created_at->toIso8601String() }} — {{ $auditLog->action }}</li>
+                <li>{{ $auditLog->created_at?->toIso8601String() ?? 'Unknown' }} — {{ $auditLog->action }}</li>
             @empty
                 <li>No account history recorded.</li>
             @endforelse

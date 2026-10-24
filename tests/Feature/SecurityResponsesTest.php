@@ -52,6 +52,20 @@ final class SecurityResponsesTest extends TestCase
         $this->assertSecurityHeaders($this->get('/security/redirect')->assertRedirect('/admin/login'));
     }
 
+    public function test_security_headers_include_cross_domain_policy_and_hsts_only_over_https(): void
+    {
+        Route::get('/security/plain', static fn () => response('plain'));
+        Route::get('/security/secure', static fn () => response('secure'));
+
+        $plain = $this->get('/security/plain');
+        $plain->assertHeader('X-Permitted-Cross-Domain-Policies', 'none')
+            ->assertHeaderMissing('Strict-Transport-Security');
+
+        $secure = $this->get('https://localhost/security/secure');
+        $secure->assertHeader('X-Permitted-Cross-Domain-Policies', 'none')
+            ->assertHeader('Strict-Transport-Security', 'max-age=31536000');
+    }
+
     public function test_production_errors_are_generic_even_when_debug_is_enabled(): void
     {
         Route::match(['get', 'post'], '/admin/security-failure/{account}', static function (): never {
@@ -169,11 +183,14 @@ final class SecurityResponsesTest extends TestCase
         Log::spy();
 
         Route::get('/security-log/{account}', static function (): never {
+            $driverException = new PDOException('database_detail_marker', 73);
+            $driverException->errorInfo = ['23505', 73, 'key value violates unique constraint'];
+
             throw new QueryException(
                 'pgsql',
                 'select * from users where password = request_password_marker',
                 ['password_hash_marker', 'binding_token_marker'],
-                new PDOException('database_detail_marker', 73),
+                $driverException,
             );
         });
 
@@ -194,6 +211,8 @@ final class SecurityResponsesTest extends TestCase
                 $this->assertSame(QueryException::class, $context['exception_class']);
                 $this->assertSame(73, $context['exception_code']);
                 $this->assertSame('security-log/{account}', $context['route']);
+                $this->assertSame([QueryException::class, PDOException::class], $context['exception_chain']);
+                $this->assertSame('23505', $context['sqlstate']);
 
                 $serializedContext = json_encode($context, JSON_THROW_ON_ERROR);
 
@@ -208,6 +227,39 @@ final class SecurityResponsesTest extends TestCase
                     'database_detail_marker',
                 ] as $secretMarker) {
                     $this->assertStringNotContainsString($secretMarker, $serializedContext);
+                }
+
+                return true;
+            }),
+        );
+    }
+
+    public function test_driver_level_failures_report_their_sqlstate_without_messages(): void
+    {
+        Log::spy();
+
+        Route::get('/security-driver-failure', static function (): never {
+            $driverException = new PDOException('driver_detail_marker', 0);
+            $driverException->errorInfo = ['08006', 0, 'connection_failure_marker'];
+
+            throw $driverException;
+        });
+
+        $this->useProductionEnvironment();
+        $this->get('/security-driver-failure')
+            ->assertStatus(500)
+            ->assertDontSeeText('driver_detail_marker');
+
+        Log::shouldHaveReceived('error')->once()->with(
+            'HTTP request failed.',
+            Mockery::on(function (array $context): bool {
+                $this->assertSame(PDOException::class, $context['exception_class']);
+                $this->assertSame('08006', $context['sqlstate']);
+
+                $serialized = json_encode($context, JSON_THROW_ON_ERROR);
+
+                foreach (['driver_detail_marker', 'connection_failure_marker'] as $marker) {
+                    $this->assertStringNotContainsString($marker, $serialized);
                 }
 
                 return true;

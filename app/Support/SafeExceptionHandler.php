@@ -3,22 +3,38 @@
 namespace App\Support;
 
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use PDOException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 final class SafeExceptionHandler
 {
+    /**
+     * Report a failure using only non-sensitive diagnostics.
+     *
+     * Exception messages, SQL, bindings, request values, and headers are deliberately
+     * excluded; the correlation identifier ties a report to its response without
+     * recording any of that material.
+     */
     public function report(Throwable $exception): bool
     {
+        $requestId = request()->attributes->get('request_id');
         $context = [
             'exception_class' => $exception::class,
             'exception_code' => $exception->getCode(),
+            'exception_chain' => $this->exceptionChain($exception),
+            'sqlstate' => $this->sqlState($exception),
         ];
+
+        if (is_string($requestId) && $requestId !== '') {
+            $context['request_id'] = $requestId;
+        }
 
         $route = request()->route();
 
@@ -26,7 +42,7 @@ final class SafeExceptionHandler
             $context['route'] = $route->uri();
         }
 
-        Log::error('HTTP request failed.', $context);
+        Log::error('HTTP request failed.', array_filter($context, static fn (mixed $value): bool => $value !== null));
 
         return false;
     }
@@ -50,6 +66,39 @@ final class SafeExceptionHandler
         }
 
         return $this->genericResponse($request, 500, 'Server error.');
+    }
+
+    /**
+     * @return array<int, class-string<Throwable>>
+     */
+    private function exceptionChain(Throwable $exception): array
+    {
+        $chain = [];
+
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            $chain[] = $current::class;
+        }
+
+        return $chain;
+    }
+
+    private function sqlState(Throwable $exception): ?string
+    {
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            if ($current instanceof QueryException) {
+                $state = $current->errorInfo[0] ?? null;
+
+                return is_string($state) && $state !== '' ? $state : null;
+            }
+
+            if ($current instanceof PDOException) {
+                $state = $current->errorInfo[0] ?? $current->getCode();
+
+                return is_string($state) && $state !== '' ? $state : null;
+            }
+        }
+
+        return null;
     }
 
     private function isRedisFailure(Throwable $exception): bool

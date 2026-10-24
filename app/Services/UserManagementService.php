@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AuditAction;
 use App\Enums\UserRole;
 use App\Models\AdminAuditLog;
 use App\Models\User;
@@ -13,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 final class UserManagementService
 {
@@ -21,6 +23,18 @@ final class UserManagementService
      * Administrator disabling must use this same key.
      */
     public const ADMINISTRATOR_STATE_LOCK_KEY = 684022671;
+
+    public function __construct()
+    {
+        // Read the driver from configuration rather than opening a connection: the shared
+        // advisory lock below is PostgreSQL SQL and must fail closed on any other driver.
+        $connection = (string) config('database.default');
+        $driver = config('database.connections.'.$connection.'.driver');
+
+        if ($driver !== 'pgsql') {
+            throw new RuntimeException('The account service requires a PostgreSQL connection.');
+        }
+    }
 
     public function bootstrapAdministrator(string $name, string $email, string $password): User
     {
@@ -54,7 +68,7 @@ final class UserManagementService
                 ]);
                 $user->save();
 
-                $this->writeAudit($connection, null, (int) $user->getKey(), 'admin.bootstrap');
+                $this->writeAudit($connection, null, (int) $user->getKey(), AuditAction::BOOTSTRAP);
 
                 return $user;
             });
@@ -94,7 +108,7 @@ final class UserManagementService
             $user->password = $passwordHash;
             $user->save();
 
-            $this->writeAudit($connection, null, (int) $user->getKey(), 'admin.password_reset');
+            $this->writeAudit($connection, null, (int) $user->getKey(), AuditAction::PASSWORD_RESET);
 
             return $user;
         });
@@ -129,7 +143,7 @@ final class UserManagementService
                 ]);
                 $user->save();
 
-                $this->writeAudit($connection, (int) $activeActor->getKey(), (int) $user->getKey(), 'admin.account_created');
+                $this->writeAudit($connection, (int) $activeActor->getKey(), (int) $user->getKey(), AuditAction::ACCOUNT_CREATED);
 
                 return $user;
             });
@@ -186,7 +200,7 @@ final class UserManagementService
                 $connection,
                 (int) $activeActor->getKey(),
                 (int) $account->getKey(),
-                'admin.account_disabled',
+                AuditAction::ACCOUNT_DISABLED,
             );
 
             return $account;
@@ -238,13 +252,13 @@ final class UserManagementService
         ];
     }
 
-    private function writeAudit(Connection $connection, ?int $actorId, int $targetUserId, string $action): void
+    private function writeAudit(Connection $connection, ?int $actorId, int $targetUserId, AuditAction $action): void
     {
         $auditLog = (new AdminAuditLog)->setConnection($connection->getName());
         $auditLog->fill([
             'actor_id' => $actorId,
             'target_user_id' => $targetUserId,
-            'action' => $action,
+            'action' => $action->value,
         ]);
         $auditLog->save();
     }

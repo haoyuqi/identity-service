@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AuditAction;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,6 +20,34 @@ final class AccountAuditSchemaTest extends TestCase
 
         $this->assertInsertIsRejected($this->userRow(' Admin@Example.test '));
         $this->assertInsertIsRejected($this->userRow('member@example.test', 'owner'));
+    }
+
+    public function test_database_rejects_unknown_audit_actions_and_allows_known_ones(): void
+    {
+        $target = User::factory()->create();
+
+        foreach (AuditAction::cases() as $action) {
+            DB::table('admin_audit_logs')->insert([
+                'actor_id' => null,
+                'target_user_id' => $target->id,
+                'action' => $action->value,
+            ]);
+        }
+
+        $this->assertDatabaseCount('admin_audit_logs', count(AuditAction::cases()));
+
+        try {
+            DB::transaction(static function () use ($target): void {
+                DB::table('admin_audit_logs')->insert([
+                    'actor_id' => null,
+                    'target_user_id' => $target->id,
+                    'action' => 'admin.unknown_action',
+                ]);
+            });
+            self::fail('An unknown audit action must be rejected by the database.');
+        } catch (QueryException) {
+            $this->assertDatabaseCount('admin_audit_logs', count(AuditAction::cases()));
+        }
     }
 
     public function test_schema_uses_timezone_aware_columns_and_account_indexes(): void

@@ -21,6 +21,15 @@ final class UserPolicyTest extends TestCase
         self::assertTrue($policy->disable($actor, $target));
     }
 
+    public function test_administrators_can_view_any_account_including_their_own(): void
+    {
+        $policy = new UserPolicy;
+        $actor = $this->user(UserRole::ADMIN, id: 7);
+
+        self::assertTrue($policy->view($actor, $actor));
+        self::assertFalse($policy->disable($actor, $actor));
+    }
+
     public function test_members_and_disabled_administrators_cannot_manage_accounts(): void
     {
         $policy = new UserPolicy;

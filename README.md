@@ -54,6 +54,12 @@ can open the protected `/admin` page. Sessions are stored in Redis; changing an
 account password invalidates its existing sessions. Sign out with the
 dashboard's POST form.
 
+Login throttling is keyed twice: five attempts per minute per normalized email
+address and client address, and twenty-five attempts per minute per client
+address. A burst against one account therefore does not lock other
+administrators out, and spraying many accounts from one address is capped
+separately.
+
 ## Account administration
 
 Active administrators can manage accounts at `/admin/users`: browse the
@@ -94,7 +100,26 @@ after the trusted proxy list is set.
 
 The login form is served at `/admin/login`, the authenticated dashboard at
 `/admin/`, and login submissions are rate limited. The container smoke workflow
-builds the image and checks `/up` and `/admin/login` in CI.
+builds the image and checks `/up`, `/ready`, and `/admin/login` in CI.
+
+Two health endpoints serve different purposes. `/up` is a liveness probe that
+only proves the PHP process is serving requests and deliberately never touches
+PostgreSQL or Redis. `/ready` is a readiness probe: it checks PostgreSQL and
+Redis and returns `503` when either is unavailable, so a load balancer or
+orchestrator can withhold traffic. Use `/up` for restart decisions and `/ready`
+for traffic decisions. Both expose status only, never connection details.
+
+Every response carries an `X-Request-Id` header, echoed from the request when the
+caller supplies a well-formed value and otherwise generated. Error reports log
+that identifier with the failing class, the exception chain, and the PostgreSQL
+SQLSTATE so an operator can correlate a user-visible failure with its log entry
+without recording messages, SQL, bindings, or request data.
+
+Redis holds sessions on the connection named by `SESSION_CONNECTION` while the
+cache store uses the separate `cache` connection and database
+(`REDIS_CACHE_DB`). Keep them on different databases. `php artisan cache:clear`
+issues `FLUSHDB` against the cache database, so sharing one database would delete
+every administrator session.
 
 ### Database deployment and backup
 
