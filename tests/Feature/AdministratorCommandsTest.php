@@ -179,6 +179,39 @@ final class AdministratorCommandsTest extends TestCase
         ]);
     }
 
+    public function test_bcrypt_looking_password_input_is_treated_as_raw_text(): void
+    {
+        $rawPassword = Hash::make('source password used to create bcrypt-looking input');
+
+        $this->artisan('identity:admin:bootstrap')
+            ->expectsQuestion('Name', 'Example Admin')
+            ->expectsQuestion('Email address', 'admin@example.test')
+            ->expectsQuestion('Password', $rawPassword)
+            ->expectsQuestion('Confirm password', $rawPassword)
+            ->expectsOutput('Administrator account created.')
+            ->doesntExpectOutputToContain($rawPassword)
+            ->assertExitCode(0);
+
+        $user = User::query()->sole();
+        $this->assertNotSame($rawPassword, $user->password);
+        $this->assertTrue(Hash::check($rawPassword, $user->password));
+        $this->assertFalse(Hash::check('source password used to create bcrypt-looking input', $user->password));
+
+        $this->artisan('identity:admin:reset-password')
+            ->expectsQuestion('Email address', 'admin@example.test')
+            ->expectsQuestion('New password', $rawPassword)
+            ->expectsQuestion('Confirm password', $rawPassword)
+            ->expectsOutput('Password reset.')
+            ->doesntExpectOutputToContain($rawPassword)
+            ->assertExitCode(0);
+
+        $user->refresh();
+        $this->assertNotSame($rawPassword, $user->password);
+        $this->assertTrue(Hash::check($rawPassword, $user->password));
+        $this->assertFalse(Hash::check('source password used to create bcrypt-looking input', $user->password));
+        $this->assertDatabaseCount('admin_audit_logs', 2);
+    }
+
     public function test_password_reset_fails_safely_for_missing_account_and_invalid_password(): void
     {
         $this->artisan('identity:admin:reset-password')
