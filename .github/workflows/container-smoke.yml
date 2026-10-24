@@ -1,0 +1,119 @@
+name: Container smoke test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  container-smoke:
+    name: Build and smoke test application container
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: identity_service
+          POSTGRES_USER: identity_service
+          POSTGRES_PASSWORD: smoke-test-only
+          TZ: UTC
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U identity_service -d identity_service"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Create an ephemeral application key
+        run: |
+          app_key="base64:$(openssl rand -base64 32 | tr -d '\n')"
+          echo "::add-mask::$app_key"
+          echo "APP_KEY=$app_key" >> "$GITHUB_ENV"
+
+      - name: Build application image
+        run: docker build --pull --tag identity-service:smoke .
+
+      - name: Apply database migrations
+        run: |
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e APP_ENV=production \
+            -e APP_KEY="$APP_KEY" \
+            -e APP_DEBUG=false \
+            -e LOG_CHANNEL=stderr \
+            -e DB_CONNECTION=pgsql \
+            -e DB_HOST=host.docker.internal \
+            -e DB_PORT=5432 \
+            -e DB_DATABASE=identity_service \
+            -e DB_USERNAME=identity_service \
+            -e DB_PASSWORD=smoke-test-only \
+            -e REDIS_HOST=host.docker.internal \
+            -e REDIS_PORT=6379 \
+            identity-service:smoke php artisan migrate --force
+
+      - name: Start application container
+        run: |
+          docker run --detach --name identity-service-smoke \
+            --add-host=host.docker.internal:host-gateway \
+            --publish 8080:8080 \
+            -e APP_ENV=production \
+            -e APP_KEY="$APP_KEY" \
+            -e APP_DEBUG=false \
+            -e LOG_CHANNEL=stderr \
+            -e APP_URL=http://127.0.0.1:8080 \
+            -e DB_CONNECTION=pgsql \
+            -e DB_HOST=host.docker.internal \
+            -e DB_PORT=5432 \
+            -e DB_DATABASE=identity_service \
+            -e DB_USERNAME=identity_service \
+            -e DB_PASSWORD=smoke-test-only \
+            -e REDIS_HOST=host.docker.internal \
+            -e REDIS_PORT=6379 \
+            -e SESSION_DRIVER=redis \
+            -e SESSION_ENCRYPT=true \
+            -e SESSION_SECURE_COOKIE=true \
+            identity-service:smoke
+
+      - name: Check health and administrator login pages
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:8080/up >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs identity-service-smoke
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(docker exec identity-service-smoke id -un)" = www-data
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/admin/login)" = 200
+
+      - name: Show application logs if the smoke test fails
+        if: ${{ failure() }}
+        run: docker logs identity-service-smoke || true
+
+      - name: Remove smoke test container
+        if: ${{ always() }}
+        run: docker rm --force identity-service-smoke || true

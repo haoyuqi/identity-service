@@ -135,6 +135,21 @@ final class AdministratorAuthenticationTest extends TestCase
             ->post(route('admin.logout'))
             ->assertRedirect(route('login'));
 
+        $invalid = $this->from(route('login'))
+            ->post(route('login.store'), [
+                'email' => ['malformed'],
+                'password' => 'correct-password',
+            ]);
+        $invalid->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+        $invalidCookie = $this->sessionCookie($invalid);
+
+        $this->resetBrowserRequestState();
+        $this->withCookie(config('session.cookie'), $invalidCookie)
+            ->get(route('login'))
+            ->assertOk()
+            ->assertSee('Administrator sign in');
+
     }
 
     public function test_members_disabled_accounts_and_wrong_passwords_receive_the_same_failure(): void
@@ -354,6 +369,7 @@ final class AdministratorAuthenticationTest extends TestCase
     {
         app('session')->forgetDrivers();
         $this->app->forgetInstance('session.store');
+        app('redirect')->setSession(app('session.store'));
         Auth::forgetGuards();
     }
 }
