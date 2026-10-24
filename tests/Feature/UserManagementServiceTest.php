@@ -96,6 +96,23 @@ final class UserManagementServiceTest extends TestCase
         $this->assertDatabaseCount('admin_audit_logs', 0);
     }
 
+    public function test_creation_hashes_a_raw_password_that_looks_like_a_bcrypt_hash(): void
+    {
+        $actor = User::factory()->admin()->create();
+        $rawPassword = Hash::make('underlying-password');
+
+        $user = (new UserManagementService)->createAccount(
+            'Hash-Looking Password',
+            'hash-looking-password@example.test',
+            UserRole::MEMBER,
+            $rawPassword,
+            $actor,
+        );
+
+        self::assertTrue(Hash::check($rawPassword, $user->getRawOriginal('password')));
+        self::assertNotSame($rawPassword, $user->getRawOriginal('password'));
+    }
+
     public function test_creation_rechecks_actor_role_and_enabled_status_inside_transaction(): void
     {
         $member = User::factory()->create();

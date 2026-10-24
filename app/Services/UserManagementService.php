@@ -10,6 +10,7 @@ use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -27,11 +28,12 @@ final class UserManagementService
         $email = mb_strtolower(trim($email));
 
         $this->validateIdentity($name, $email, $password);
+        $passwordHash = Hash::make($password);
 
         $connection = (new User)->getConnection();
 
         try {
-            return $connection->transaction(function () use ($connection, $name, $email, $password): User {
+            return $connection->transaction(function () use ($connection, $name, $email, $passwordHash): User {
                 $connection->select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
 
                 $existingAdmin = User::on($connection->getName())
@@ -47,7 +49,7 @@ final class UserManagementService
                 $user->forceFill([
                     'name' => $name,
                     'email' => $email,
-                    'password' => $password,
+                    'password' => $passwordHash,
                     'role' => UserRole::ADMIN,
                 ]);
                 $user->save();
@@ -78,17 +80,18 @@ final class UserManagementService
                 'password' => $this->passwordRules(),
             ],
         )->validate();
+        $passwordHash = Hash::make($password);
 
         $connection = (new User)->getConnection();
 
-        return $connection->transaction(function () use ($connection, $email, $password): User {
+        return $connection->transaction(function () use ($connection, $email, $passwordHash): User {
             $user = User::on($connection->getName())->where('email', $email)->first();
 
             if ($user === null) {
                 throw new DomainException('No account was found for that email address.');
             }
 
-            $user->password = $password;
+            $user->password = $passwordHash;
             $user->save();
 
             $this->writeAudit($connection, null, (int) $user->getKey(), 'admin.password_reset');
@@ -108,11 +111,12 @@ final class UserManagementService
         $email = mb_strtolower(trim($email));
 
         $this->validateIdentity($name, $email, $password);
+        $passwordHash = Hash::make($password);
 
         $connection = (new User)->getConnection();
 
         try {
-            return $connection->transaction(function () use ($connection, $name, $email, $role, $password, $actor): User {
+            return $connection->transaction(function () use ($connection, $name, $email, $role, $passwordHash, $actor): User {
                 $connection->select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
                 $activeActor = $this->lockActiveAdministrator($connection, $actor);
 
@@ -120,7 +124,7 @@ final class UserManagementService
                 $user->forceFill([
                     'name' => $name,
                     'email' => $email,
-                    'password' => $password,
+                    'password' => $passwordHash,
                     'role' => $role,
                 ]);
                 $user->save();
