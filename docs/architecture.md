@@ -18,6 +18,7 @@ and public token authentication are outside this service's session-only scope.
 | Concern | Source of truth |
 | --- | --- |
 | HTTP routes and bootstrap | [web routes](../routes/web.php), [application bootstrap](../bootstrap/app.php) |
+| HTTP error handling and response headers | [safe exception handler](../app/Support/SafeExceptionHandler.php), [security headers](../app/Http/Middleware/SecurityHeaders.php) |
 | Controller boundary | [base controller](../app/Http/Controllers/Controller.php) |
 | Administrator bootstrap and password reset | [bootstrap command](../app/Console/Commands/BootstrapAdministratorCommand.php), [password reset command](../app/Console/Commands/ResetAdministratorPasswordCommand.php), [user management service](../app/Services/UserManagementService.php) |
 | Accounts and roles | [User](../app/Models/User.php), [UserRole](../app/Enums/UserRole.php) |
@@ -29,6 +30,7 @@ and public token authentication are outside this service's session-only scope.
 | Runtime configuration | [database](../config/database.php), [session](../config/session.php), [environment example](../.env.example) |
 | Test setup and database guard | [test case](../tests/TestCase.php), [database safety guard](../tests/Support/TestDatabaseGuard.php), [PHPUnit configuration](../phpunit.xml) |
 | Health, persistence, schema, and audit tests | [health check](../tests/Feature/HealthCheckTest.php), [user model](../tests/Feature/UserModelTest.php), [account schema](../tests/Feature/AccountAuditSchemaTest.php), [audit model](../tests/Feature/AdminAuditLogTest.php), [administrator commands](../tests/Feature/AdministratorCommandsTest.php) |
+| Security response behavior | [security response tests](../tests/Feature/SecurityResponsesTest.php) |
 | Coverage gate | [coverage test](../tests/Unit/CoverageGateTest.php), [coverage verifier](../scripts/verify-coverage.php), [CI workflow](../.github/workflows/ci.yml), [Composer scripts](../composer.json) |
 
 Follow the actual source and tests when locating a feature. Keep this map focused
@@ -91,6 +93,19 @@ inside the transaction-scoped shared advisory lock, protects the final enabled
 administrator, and commits each account change with its audit record. Account
 pages display status and target-account audit history; they do not expose
 password hashes or provide role changes, deletion, or re-enabling.
+
+HTTP responses include content-type sniffing, framing, referrer, and
+same-origin content security policies. Administrative and login route
+responses are marked `private, no-store`, including error responses finalized
+outside the middleware stack. In production, unexpected application and
+database failures return a generic 500 response even when debug mode is
+enabled; Redis client failures return a generic 503 in every environment.
+HTTP exceptions retain their status and safe protocol headers while returning
+generic bodies. Validation, authentication, and redirect responses retain
+Laravel's response handling. Error reports record the exception class and code
+plus a matched route template when available. They do not include exception
+messages, traces, SQL bindings, request values, query strings, cookies, or
+authorization headers.
 
 ## Documentation maintenance
 
