@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use Tests\TestCase;
 
-class HealthCheckTest extends TestCase
+final class HealthCheckTest extends TestCase
 {
     public function test_the_health_endpoint_returns_success(): void
     {

@@ -1,14 +1,23 @@
 <?php
 
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\ReadinessController;
 use App\Http\Controllers\SessionController;
 use App\Http\Middleware\EnsureActiveAdministrator;
 use Illuminate\Support\Facades\Route;
 
+// Readiness must not depend on the stateful part of the web group: with Redis-backed
+// sessions, StartSession would write a session and a cookie for every probe and would
+// replace the probe's own 503 when Redis is the unavailable dependency. Global
+// middleware still applies, so the response keeps its identifier and security headers.
+Route::get('/ready', ReadinessController::class)
+    ->withoutMiddleware('web')
+    ->name('ready');
+
 Route::middleware('guest')->group(function (): void {
     Route::get('/admin/login', [SessionController::class, 'create'])->name('login');
     Route::post('/admin/login', [SessionController::class, 'store'])
-        ->middleware('throttle:5,1')
+        ->middleware('throttle:login')
         ->name('login.store');
 });
 

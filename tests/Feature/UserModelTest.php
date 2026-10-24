@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-class UserModelTest extends TestCase
+final class UserModelTest extends TestCase
 {
     use RefreshDatabase;
 

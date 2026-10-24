@@ -230,6 +230,8 @@ final class AdministrativeAccountsTest extends TestCase
             ->from(route('admin.users.show', $target))
             ->patch(route('admin.users.disable', $target));
 
+        self::assertTrue($removed, 'The race hook must delete the target inside the transaction.');
+
         $response->assertRedirect(route('admin.users.show', $target))
             ->assertSessionHasErrors(['account' => 'The account no longer exists.']);
         $this->assertDatabaseHas('users', ['id' => $target->id, 'disabled_at' => null]);
@@ -268,6 +270,8 @@ final class AdministrativeAccountsTest extends TestCase
                     'role' => UserRole::MEMBER->value,
                     'password' => 'valid-password-123',
                 ]);
+
+            self::assertTrue($competitorInserted, 'The race hook must insert the competing account.');
 
             $response->assertRedirect(route('admin.users.create'))
                 ->assertSessionHasErrors(['email' => 'An account with this email already exists.']);
@@ -318,6 +322,10 @@ final class AdministrativeAccountsTest extends TestCase
     public function test_guests_members_disabled_administrators_and_self_disable_are_rejected(): void
     {
         $this->get(route('admin.users.index'))->assertRedirect(route('login'));
+
+        // Authentication must run before route model binding, otherwise a guest could tell a
+        // missing account identifier (404) from an existing one (redirect to login).
+        $this->get(route('admin.users.show', 999999))->assertRedirect(route('login'));
 
         $member = User::factory()->create(['role' => UserRole::MEMBER]);
         $this->actingAs($member, 'web')

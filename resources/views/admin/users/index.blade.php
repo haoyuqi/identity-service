@@ -24,7 +24,7 @@
                     <tr>
                         <td><a href="{{ route('admin.users.show', $user) }}">{{ $user->name }}</a></td>
                         <td>{{ $user->email }}</td>
-                        <td>{{ $user->role->value }}</td>
+                        <td>{{ $user->role?->value ?? 'unknown' }}</td>
                         <td>{{ $user->disabled_at === null ? 'Active' : 'Disabled' }}</td>
                     </tr>
                 @empty

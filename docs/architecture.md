@@ -18,12 +18,15 @@ and public token authentication are outside this service's session-only scope.
 | Concern | Source of truth |
 | --- | --- |
 | HTTP routes and bootstrap | [web routes](../routes/web.php), [application bootstrap](../bootstrap/app.php) |
+| Health and readiness probes | [readiness controller](../app/Http/Controllers/ReadinessController.php) |
+| Request correlation | [request identifier middleware](../app/Http/Middleware/AssignRequestId.php) |
 | HTTP error handling and response headers | [safe exception handler](../app/Support/SafeExceptionHandler.php), [security headers](../app/Http/Middleware/SecurityHeaders.php) |
 | Controller boundary | [base controller](../app/Http/Controllers/Controller.php) |
 | Administrator bootstrap and password reset | [bootstrap command](../app/Console/Commands/BootstrapAdministratorCommand.php), [password reset command](../app/Console/Commands/ResetAdministratorPasswordCommand.php), [user management service](../app/Services/UserManagementService.php) |
 | Accounts and roles | [User](../app/Models/User.php), [UserRole](../app/Enums/UserRole.php) |
+| Audited operations | [AuditAction](../app/Enums/AuditAction.php) |
 | Audit records | [AdminAuditLog](../app/Models/AdminAuditLog.php) |
-| Persistence schema | [initial migration](../database/migrations/0001_01_01_000000_create_users_table.php), [account and audit migration](../database/migrations/2026_10_23_000001_add_account_status_and_admin_audit_logs.php) |
+| Persistence schema | [initial migration](../database/migrations/0001_01_01_000000_create_users_table.php), [account and audit migration](../database/migrations/2026_10_23_000001_add_account_status_and_admin_audit_logs.php), [audit action constraint migration](../database/migrations/2026_10_24_000001_constrain_admin_audit_actions.php) |
 | Administrator session login | [session controller](../app/Http/Controllers/SessionController.php), [authentication service](../app/Services/AuthenticationService.php), [login request](../app/Http/Requests/LoginRequest.php), [active administrator middleware](../app/Http/Middleware/EnsureActiveAdministrator.php) |
 | Session pages | [login](../resources/views/auth/login.blade.php), [dashboard](../resources/views/admin/dashboard.blade.php) |
 | Administrative account pages and actions | [account routes](../routes/web.php), [user controller](../app/Http/Controllers/Admin/UserController.php), [user policy](../app/Policies/UserPolicy.php), [account service](../app/Services/UserManagementService.php), [account views](../resources/views/admin/users) |
@@ -63,8 +66,9 @@ User timestamps and audit `created_at` use PostgreSQL `timestamptz`. Connections
 and model timestamp assignments normalize instants to UTC; legacy timestamps
 are explicitly interpreted as UTC during migration.
 
-Audit records contain a nullable actor, a required target account, an action,
-and a creation timestamp. Foreign keys prevent removal of referenced accounts.
+Audit records contain a nullable actor, a required target account, an action
+constrained to the [AuditAction](../app/Enums/AuditAction.php) values by both the
+model and a database check constraint, and a creation timestamp. Foreign keys prevent removal of referenced accounts.
 Model instances reject audit updates and deletion. This is application-level
 append-only behavior, not protection against privileged raw SQL or bulk query
 mutations. Business services must only insert audit records, in the same
@@ -76,7 +80,9 @@ OAuth/OIDC/token endpoints. Those are outside this issue's scope.
 
 Administrator sign-in is available at `/admin/login`. Login accepts enabled
 administrator accounts only; unsuccessful attempts use the same generic
-credential message and are limited to five attempts per minute. Successful
+credential message and are limited to five attempts per minute per normalized
+email address and client address, plus twenty-five attempts per minute per
+client address, so one account's failures cannot lock out the others. Successful
 login regenerates the session ID and records Laravel's HMAC of the stored
 password hash in the Redis-backed session. Each administrator request checks
 that marker and delegates to Laravel's `auth.session` middleware so password
@@ -94,18 +100,34 @@ administrator, and commits each account change with its audit record. Account
 pages display status and target-account audit history; they do not expose
 password hashes or provide role changes, deletion, or re-enabling.
 
-HTTP responses include content-type sniffing, framing, referrer, and
-same-origin content security policies. Administrative and login route
-responses are marked `private, no-store`, including error responses finalized
-outside the middleware stack. In production, unexpected application and
+HTTP responses include content-type sniffing, framing, referrer, cross-domain
+policy, and same-origin content security policies, plus
+`Strict-Transport-Security` on requests the application receives over HTTPS.
+Administrative and login route responses are marked `private, no-store`,
+including error responses finalized outside the middleware stack.
+
+Every response carries `X-Request-Id`. The outermost middleware assigns it before
+any other middleware runs, so error rendering and reporting can reference it; a
+caller-supplied value is honored only when it matches a restricted pattern and is
+otherwise replaced. Requests to `/admin/*` are authenticated and have their
+session validated before route model binding, so an unauthenticated caller
+cannot distinguish an existing account identifier from a missing one. In production, unexpected application and
 database failures return a generic 500 response even when debug mode is
 enabled; Redis client failures return a generic 503 in every environment.
 HTTP exceptions retain their status and safe protocol headers while returning
 generic bodies. Validation, authentication, and redirect responses retain
-Laravel's response handling. Error reports record the exception class and code
-plus a matched route template when available. They do not include exception
-messages, traces, SQL bindings, request values, query strings, cookies, or
+Laravel's response handling. Error reports record the exception class and code,
+the chain of wrapped exception classes, any PostgreSQL SQLSTATE, the request
+identifier, and a matched route template when available. The identifier is
+resolved on demand, so a failure reported before the middleware stack ran is
+logged with the same value its response carries. They do not include exception
+messages, traces, SQL, bindings, request values, query strings, cookies, or
 authorization headers.
+
+The readiness probe is registered outside the `web` middleware group. It reports
+dependency state without a session, so with Redis-backed sessions a probe neither
+writes a session or cookie nor loses its own 503 when Redis is the unavailable
+dependency.
 
 ## Documentation maintenance
 

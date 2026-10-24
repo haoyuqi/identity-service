@@ -109,6 +109,9 @@ jobs:
           done
           test "$(docker exec identity-service-smoke id -un)" = www-data
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/admin/login)" = 200
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/ready)" = 200
+          test -n "$(curl --silent --head http://127.0.0.1:8080/up | tr -d '\r' | awk -F': ' 'tolower($1)=="x-request-id" {print $2}')"
+
 
       - name: Show application logs if the smoke test fails
         if: ${{ failure() }}

@@ -96,6 +96,29 @@ final class UserManagementServiceTest extends TestCase
         $this->assertDatabaseCount('admin_audit_logs', 0);
     }
 
+    public function test_the_service_refuses_a_non_postgresql_connection(): void
+    {
+        config(['database.connections.non_postgres' => [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ]]);
+        config(['database.default' => 'non_postgres']);
+        DB::purge('non_postgres');
+
+        try {
+            new UserManagementService;
+            self::fail('A non-PostgreSQL connection must be rejected.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('The account service requires a PostgreSQL connection.', $exception->getMessage());
+        } finally {
+            config(['database.default' => 'testing']);
+            DB::purge('non_postgres');
+            config()->offsetUnset('database.connections.non_postgres');
+        }
+    }
+
     public function test_creation_hashes_a_raw_password_that_looks_like_a_bcrypt_hash(): void
     {
         $actor = User::factory()->admin()->create();
