@@ -1,15 +1,14 @@
 ## Summary
 
-<!-- Describe the change and link the related issue. -->
+<!-- Describe the final changes and the before/after behavior. Include each substantive change,
+including testing, CI and documentation. Keep this description aligned with the final code;
+it is used as source material for automated release notes. -->
 
-Closes #
+## Upgrade impact
+
+<!-- State runtime requirements, configuration changes, migrations, queue or schedule changes,
+and breaking changes with exact versions where relevant. Write "None" when there is no impact. -->
 
 ## Verification
 
-- [ ] Automated tests pass.
-- [ ] Formatting and static analysis pass.
-- [ ] Dependency audit passes.
-
-## Review notes
-
-<!-- Call out operational changes or anything reviewers should pay attention to. -->
+<!-- List relevant checks and results, and anything that remains unverified. -->

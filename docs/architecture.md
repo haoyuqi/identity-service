@@ -34,7 +34,7 @@ and public token authentication are outside this service's session-only scope.
 | Test setup and database guard | [test case](../tests/TestCase.php), [database safety guard](../tests/Support/TestDatabaseGuard.php), [PHPUnit configuration](../phpunit.xml) |
 | Health, persistence, schema, and audit tests | [health check](../tests/Feature/HealthCheckTest.php), [user model](../tests/Feature/UserModelTest.php), [account schema](../tests/Feature/AccountAuditSchemaTest.php), [audit model](../tests/Feature/AdminAuditLogTest.php), [administrator commands](../tests/Feature/AdministratorCommandsTest.php) |
 | Security response behavior | [security response tests](../tests/Feature/SecurityResponsesTest.php) |
-| Coverage gate | [CI workflow](../.github/workflows/ci.yml), [Composer scripts](../composer.json) |
+| Coverage gate and release automation | [CI workflow](../.github/workflows/ci.yml), [release workflow](../.github/workflows/release.yml), [release script](../.github/scripts/release-notes.py), [Composer scripts](../composer.json) |
 
 Follow the actual source and tests when locating a feature. Keep this map focused
 on implemented behavior and update it when the code structure changes.
@@ -136,6 +136,30 @@ independent guarded workers to verify first-administrator creation and mutual
 administrator disabling under actual PostgreSQL lock contention. The
 [session tests](../tests/Feature/AdministratorAuthenticationTest.php) exercise
 Redis cookies after password reset and account disablement through the service.
+
+- Tagging a commit reachable from `main` with a canonical `vX.Y.Z` tag runs
+  [.github/workflows/release.yml](../.github/workflows/release.yml): it validates
+  tag ancestry, runs both [.github/workflows/ci.yml](../.github/workflows/ci.yml)
+  and [.github/workflows/container-smoke.yml](../.github/workflows/container-smoke.yml)
+  on the tagged commit, generates bilingual release notes via
+  `.github/scripts/release-notes.py`, and publishes the GitHub release once all
+  checks pass. Generation starts after CI succeeds. Sources are the complete
+  titles and descriptions of merged PRs associated with commits in the actual
+  tag range, plus full messages of unmatched commits, including merges. PRs
+  are deduplicated; sources are neither compressed nor truncated. One model
+  request produces structured English and Chinese entries. Local checks require
+  valid structure, nonempty bilingual text and coverage of every source ID; they
+  do not establish semantic correctness. The program renders source links and
+  exact added, changed or removed Composer runtime/platform constraints.
+  DNS/connect failures, HTTP 429 rate limits and HTTP 500/502/503/504 responses
+  get at most three attempts with 2- and 4-second backoff; exhausted quotas,
+  authentication errors, timeouts, incomplete responses and invalid generated
+  content are not retried. Missing configuration or any generation/validation
+  failure stops publication; there is no fallback or second AI review call.
+  Requests exceeding the existing 1,000,000-byte transport limit fail without
+  shortening sources. Public failure logs contain generic notices only.
+  Manual `workflow_dispatch` runs skip CI and generate the `release-notes`
+  artifact for preview without publishing.
 
 Keep each fact in one owning reference and link to it elsewhere. Update this
 document when implemented responsibilities or execution paths change. The
