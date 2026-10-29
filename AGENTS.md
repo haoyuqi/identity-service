@@ -4,7 +4,7 @@ This guide supplements global instructions. Follow the user's requirements for t
 
 ## Reading order
 
-- [README.md](README.md): setup, configuration, administrator commands, verification and operations.
+- [README.md](README.md): setup, configuration, administrator commands, testing, deployment and operations.
 - [docs/architecture.md](docs/architecture.md): feature map, responsibilities and runtime paths.
 - [docs/code-style.md](docs/code-style.md): naming, types and readability.
 
@@ -21,7 +21,7 @@ Read the owning reference and verify it against the source. When responsibilitie
 
 ## Verification
 
-Run the commands in README's *Verification* section. The suite needs the dedicated test role and `.env.testing`; Redis session tests use `REDIS_TEST_*` and never flush. Report what ran, its results and any unverified scope; a cancelled or incomplete run is not a pass.
+Run the commands in README's *Testing* section. The suite needs the dedicated test role and `.env.testing`; Redis session tests use `REDIS_TEST_*` and never flush. Report what ran, its results and any unverified scope; a cancelled or incomplete run is not a pass.
 
 ## Delivery
 

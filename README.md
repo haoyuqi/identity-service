@@ -12,14 +12,16 @@
   English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-An isolated Laravel 13 service for private administrative accounts. The repository is public; the application runs privately and exposes no registration or token API.
+Identity Service is a private administrator console built on Laravel 13. Accounts and audit records live in PostgreSQL 18; sessions live in Redis.
+
+There is no public registration, self-service password reset or token API. Administrators are created from a trusted shell.
 
 ## Requirements
 
-- PHP 8.4.27 or later, or 8.5.12 or later, with `pdo_pgsql` and `redis`
+- PHP 8.4.27 or later, or 8.5.12 or later on PHP 8.5, with `pdo_pgsql` and `redis`
 - Composer 2
 - PostgreSQL 18
-- Redis, used for administrator sessions
+- Redis
 
 ## Getting started
 
@@ -30,65 +32,66 @@ php artisan key:generate
 php artisan migrate
 ```
 
-Set the PostgreSQL and Redis connections in `.env`. `GET /up` proves that the process serves requests; it deliberately does not touch either dependency.
+Fill in the connections in `.env`, then serve the `public/` directory behind TLS. Sign-in starts at `/admin/login`.
 
 ## Configuration
 
+`.env.example` holds working local values; production secrets belong in the platform secret store.
+
 | Variable | Purpose |
 | --- | --- |
-| `APP_KEY` | At-rest key for encrypted sessions. Preserve it across normal deployments. |
-| `APP_URL` | Public HTTPS origin. |
+| `APP_KEY` | Encrypts session data. Keep it across deployments. |
+| `APP_URL` | Public origin behind the reverse proxy. |
 | `DB_*` | PostgreSQL 18 connection. |
-| `SESSION_DRIVER`, `SESSION_CONNECTION` | `redis`, on the `default` Redis connection. |
-| `SESSION_LIFETIME`, `SESSION_ENCRYPT`, `SESSION_SECURE_COOKIE` | `120`, `true`, `true` in production. |
-| `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | Redis endpoint and credentials. |
-| `CACHE_STORE`, `REDIS_CACHE_DB` | `redis`; the cache store uses the `cache` connection and its own database. |
+| `SESSION_DRIVER`, `SESSION_CONNECTION` | Redis session storage. |
+| `SESSION_LIFETIME` | Idle lifetime in minutes. |
+| `SESSION_ENCRYPT`, `SESSION_SECURE_COOKIE` | Keep both `true` outside local HTTP development. |
+| `REDIS_*` | Redis endpoint and credentials. |
+| `CACHE_STORE`, `REDIS_CACHE_DB` | Redis cache on its own database. |
 | `LOG_CHANNEL` | `stderr` in production. |
 
 ## Administrator commands
 
-```sh
-php artisan identity:admin:bootstrap       # first administrator; refuses a second enabled one
-php artisan identity:admin:reset-password  # reset an account password
-```
+| Command | Purpose |
+| --- | --- |
+| `php artisan identity:admin:bootstrap` | Create the first administrator. |
+| `php artisan identity:admin:reset-password` | Set a new password for an account. |
 
-Both read passwords through hidden confirmed prompts, never accept a password argument, and commit the account change with its audit row in one transaction.
+Both hide the password input and never accept it as an argument. Each change commits with its audit row in one transaction.
 
 ## Access rules
 
-- Sign in at `/admin/login`; only enabled administrators reach `/admin`.
-- Login allows 5 attempts per minute per email/address pair and 25 per minute per address.
-- A password change invalidates existing sessions; this relies on Redis-backed sessions.
+- Only enabled administrators reach `/admin`; others are sent to `/admin/login`.
+- Login allows five attempts per minute per email and address, and twenty-five per address.
+- Changing a password invalidates existing sessions.
 - Administrators cannot disable themselves or the last enabled administrator.
 
-## Verification
+## Testing
 
-```sh
-composer validate --strict
-vendor/bin/pint --test
-vendor/bin/phpstan analyse --no-progress
-composer test:coverage
-composer audit --locked --no-interaction
-```
+| Command | Purpose |
+| --- | --- |
+| `composer validate --strict` | Validate the Composer manifest. |
+| `vendor/bin/pint --test` | Check formatting. |
+| `vendor/bin/phpstan analyse --no-progress` | Run Larastan at level 5. |
+| `composer test:coverage` | Run the suite and require 100% `app/` line coverage. |
+| `composer audit --locked --no-interaction` | Audit locked dependencies. |
 
-Tests need PostgreSQL 18 with a dedicated role and database:
+Tests need a dedicated PostgreSQL 18 role and database:
 
 ```sql
 CREATE ROLE identity_service_test LOGIN CREATEDB NOSUPERUSER;
 ```
 
-Create the ignored `.env.testing` with a fresh `APP_KEY`, `TEST_DB_HOST` (`127.0.0.1` or `postgres`) and `TEST_DB_PASSWORD`. The guard requires port `5432`, the `identity_service_test` database and role, a PostgreSQL 18 server, and that role's ownership of the database. Session tests use a Redis test namespace configured by `REDIS_TEST_*` and never flush it.
+Set `.env.testing` from `.env.example` with a fresh `APP_KEY`, `TEST_DB_HOST` and `TEST_DB_PASSWORD`. The guard requires port `5432` and the `identity_service_test` database and role. CI requires exactly 100% line coverage for `app/`.
 
-CI requires exactly 100% line coverage for `app/`; `composer test:coverage` applies the same gate locally.
+## Deployment and operations
 
-## Operations
-
-- Run the image as non-root on port 8080 behind TLS, and trust only explicit proxy CIDRs: `$middleware->trustProxies(at: ['10.20.0.0/16'])`, never `*`.
-- Keep sessions and cache on different Redis databases: `cache:clear` issues `FLUSHDB` and would delete every administrator session.
-- Back up with `pg_dump` and restore into a separate database before switching over. Keep `APP_KEY` outside the backup; after a restore, rotate it and start from a session namespace with no prior data.
-- Use `/up` for restart decisions and `/ready` for traffic decisions.
-- Push a `vX.Y.Z` tag on `main` to publish a release; a manual dispatch only previews the generated notes.
+- Run as a non-root user on port 8080 behind TLS, and trust only explicit proxy ranges in `bootstrap/app.php`, never `*`.
+- Keep sessions and cache on separate Redis databases; `cache:clear` flushes its database and would sign everyone out.
+- Back up with `pg_dump`, keep `APP_KEY` outside the backup, and rotate it after a restore.
+- Use `/up` to decide restarts and `/ready` to decide traffic.
+- Publish by pushing a `vX.Y.Z` tag on `main`. The workflow runs CI and the container smoke test before creating the release; a manual dispatch only previews the notes.
 
 ## License
 
-Project code is MIT licensed. Third-party content keeps its own rights.
+Project code is licensed under the [MIT license](LICENSE).
