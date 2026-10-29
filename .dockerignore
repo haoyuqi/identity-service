@@ -17,6 +17,14 @@ auth.json
 vendor
 node_modules
 tests
+docs
+scripts
+README.md
+CONTRIBUTING.md
+AGENTS.md
+phpunit.xml
+phpstan.neon
+pint.json
 build
 coverage
 storage/logs/*

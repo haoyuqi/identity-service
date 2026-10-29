@@ -132,13 +132,8 @@ jobs:
       - name: Check actual PHP platform requirements
         run: composer check-platform-reqs
 
-      - name: Run tests and generate coverage
-        run: |
-          mkdir -p build
-          php artisan test --coverage --min=100 --coverage-clover=build/coverage.xml
-
-      - name: Enforce complete application line coverage
-        run: php scripts/verify-coverage.php build/coverage.xml
+      - name: Run tests and enforce complete coverage
+        run: composer test:coverage
 
       - name: Upload coverage report
         if: ${{ always() }}
