@@ -34,7 +34,7 @@ and public token authentication are outside this service's session-only scope.
 | Test setup and database guard | [test case](../tests/TestCase.php), [database safety guard](../tests/Support/TestDatabaseGuard.php), [PHPUnit configuration](../phpunit.xml) |
 | Health, persistence, schema, and audit tests | [health check](../tests/Feature/HealthCheckTest.php), [user model](../tests/Feature/UserModelTest.php), [account schema](../tests/Feature/AccountAuditSchemaTest.php), [audit model](../tests/Feature/AdminAuditLogTest.php), [administrator commands](../tests/Feature/AdministratorCommandsTest.php) |
 | Security response behavior | [security response tests](../tests/Feature/SecurityResponsesTest.php) |
-| Coverage gate | [coverage test](../tests/Unit/CoverageGateTest.php), [coverage verifier](../scripts/verify-coverage.php), [CI workflow](../.github/workflows/ci.yml), [Composer scripts](../composer.json) |
+| Coverage gate | [CI workflow](../.github/workflows/ci.yml), [Composer scripts](../composer.json) |
 
 Follow the actual source and tests when locating a feature. Keep this map focused
 on implemented behavior and update it when the code structure changes.
@@ -139,6 +139,7 @@ Redis cookies after password reset and account disablement through the service.
 
 Keep each fact in one owning reference and link to it elsewhere. Update this
 document when implemented responsibilities or execution paths change. The
-[code style](code-style.md) owns naming and readability rules;
-[Contributing](../CONTRIBUTING.md) owns development, verification, and review
-requirements.
+[code style](code-style.md) owns naming and readability rules, and
+[AGENTS.md](../AGENTS.md) owns development, verification and review
+requirements. [README](../README.md) owns setup, operations and the
+administrator-facing behavior of the service.

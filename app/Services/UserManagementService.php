@@ -6,7 +6,7 @@ use App\Enums\AuditAction;
 use App\Enums\UserRole;
 use App\Models\AdminAuditLog;
 use App\Models\User;
-use Closure;
+use App\Rules\PasswordBytes;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -92,6 +92,8 @@ final class UserManagementService
         $passwordHash = Hash::make($password);
 
         return DB::transaction(function () use ($email, $passwordHash): User {
+            DB::select('select pg_advisory_xact_lock(?)', [self::ADMINISTRATOR_STATE_LOCK_KEY]);
+
             $user = User::query()->where('email', $email)->first();
 
             if ($user === null) {
@@ -224,20 +226,11 @@ final class UserManagementService
     }
 
     /**
-     * @return array<int, string|Closure(string, mixed, Closure(string): void): void>
+     * @return array<int, string|PasswordBytes>
      */
     private function passwordRules(): array
     {
-        return [
-            'required',
-            'string',
-            'min:12',
-            static function (string $attribute, mixed $value, Closure $fail): void {
-                if (is_string($value) && strlen($value) > 72) {
-                    $fail('The password must not exceed 72 bytes.');
-                }
-            },
-        ];
+        return ['required', 'string', 'min:12', new PasswordBytes];
     }
 
     private function writeAudit(?int $actorId, int $targetUserId, AuditAction $action): void

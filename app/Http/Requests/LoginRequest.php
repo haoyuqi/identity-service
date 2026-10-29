@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use Closure;
+use App\Rules\PasswordBytes;
 use Illuminate\Foundation\Http\FormRequest;
 
 class LoginRequest extends FormRequest
@@ -22,21 +22,13 @@ class LoginRequest extends FormRequest
     }
 
     /**
-     * @return array<string, array<int, string|Closure>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
         return [
             'email' => ['required', 'email', 'max:255'],
-            'password' => [
-                'required',
-                'string',
-                static function (string $attribute, mixed $value, Closure $fail): void {
-                    if (is_string($value) && strlen($value) > 72) {
-                        $fail('The password must not exceed 72 bytes.');
-                    }
-                },
-            ],
+            'password' => ['required', 'string', new PasswordBytes],
         ];
     }
 

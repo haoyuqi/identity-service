@@ -6,7 +6,7 @@
     "keywords": ["laravel", "identity"],
     "license": "MIT",
     "require": {
-        "php": "^8.4",
+        "php": "~8.4.27 || ^8.5.12",
         "ext-pdo_pgsql": "*",
         "ext-redis": "*",
         "laravel/framework": "^13.17"
@@ -33,14 +33,13 @@
     },
     "scripts": {
         "setup": [
-            "composer install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate"
         ],
         "test": "@php artisan test",
         "test:coverage": [
-            "@php artisan test --coverage --min=100 --coverage-clover=build/coverage.xml",
-            "@php scripts/verify-coverage.php build/coverage.xml"
+            "@php -r \"is_dir('build') || mkdir('build', 0777, true);\"",
+            "@php artisan test --coverage --min=100 --coverage-clover=build/coverage.xml"
         ],
         "analyse": "@php vendor/bin/phpstan analyse --no-progress",
         "format": "@php vendor/bin/pint",
@@ -64,11 +63,7 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true,
-        "allow-plugins": {
-            "pestphp/pest-plugin": true,
-            "php-http/discovery": true
-        }
+        "sort-packages": true
     },
     "minimum-stability": "stable",
     "prefer-stable": true

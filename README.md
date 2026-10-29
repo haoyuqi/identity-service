@@ -1,15 +1,27 @@
-# Identity Service
+<h1 align="center">Identity Service</h1>
 
-An isolated Laravel 13 service for private administrative account management.
-The repository is public; the application is intended for a private
-administrative runtime. It does not provide public registration or token APIs.
+<p align="center">
+  <a href="https://github.com/haoyuqi/identity-service/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/haoyuqi/identity-service/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/haoyuqi/identity-service/actions/workflows/container-smoke.yml"><img alt="Container smoke test" src="https://github.com/haoyuqi/identity-service/actions/workflows/container-smoke.yml/badge.svg?branch=main"></a>
+  <a href="https://laravel.com/docs/13.x"><img alt="Laravel 13" src="https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white"></a>
+  <a href="https://github.com/haoyuqi/identity-service/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/release/haoyuqi/identity-service.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+</p>
+
+<p align="center">
+  English | <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+Identity Service is a private administrator console built on Laravel 13. Accounts and audit records live in PostgreSQL 18; sessions live in Redis.
+
+There is no public registration, self-service password reset or token API. Administrators are created from a trusted shell.
 
 ## Requirements
 
-- PHP 8.4 with the extensions required by Laravel and the locked Composer packages
+- PHP 8.4.27 or later, or 8.5.12 or later on PHP 8.5, with `pdo_pgsql` and `redis`
 - Composer 2
 - PostgreSQL 18
-- Redis for Laravel sessions
+- Redis
 
 ## Getting started
 
@@ -17,204 +29,69 @@ administrative runtime. It does not provide public registration or token APIs.
 composer install
 cp .env.example .env
 php artisan key:generate
+php artisan migrate
 ```
 
-Configure the local `.env` with the application URL, PostgreSQL connection, and
-Redis session connection. Keep credentials in this ignored local file or another
-secret store; never commit them. For local development over plain HTTP only,
-set `SESSION_SECURE_COOKIE=false` in `.env`; keep it enabled for HTTPS. The
-health endpoint is `/up`.
+Fill in the connections in `.env`, then serve the `public/` directory behind TLS. Sign-in starts at `/admin/login`.
+
+## Configuration
+
+`.env.example` holds working local values; production secrets belong in the platform secret store.
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_KEY` | Encrypts session data. Keep it across deployments. |
+| `APP_URL` | Public origin behind the reverse proxy. |
+| `DB_*` | PostgreSQL 18 connection. |
+| `SESSION_DRIVER`, `SESSION_CONNECTION` | Redis session storage. |
+| `SESSION_LIFETIME` | Idle lifetime in minutes. |
+| `SESSION_ENCRYPT`, `SESSION_SECURE_COOKIE` | Keep both `true` outside local HTTP development. |
+| `REDIS_*` | Redis endpoint and credentials. |
+| `CACHE_STORE`, `REDIS_CACHE_DB` | Redis cache on its own database. |
+| `LOG_CHANNEL` | `stderr` in production. |
 
 ## Administrator commands
 
-Create the first administrator from a controlled environment with:
+| Command | Purpose |
+| --- | --- |
+| `php artisan identity:admin:bootstrap` | Create the first administrator. |
+| `php artisan identity:admin:reset-password` | Set a new password for an account. |
 
-```sh
-php artisan identity:admin:bootstrap
+Both hide the password input and never accept it as an argument. Each change commits with its audit row in one transaction.
+
+## Access rules
+
+- Only enabled administrators reach `/admin`; others are sent to `/admin/login`.
+- Login allows five attempts per minute per email and address, and twenty-five per address.
+- Changing a password invalidates existing sessions.
+- Administrators cannot disable themselves or the last enabled administrator.
+
+## Testing
+
+| Command | Purpose |
+| --- | --- |
+| `composer validate --strict` | Validate the Composer manifest. |
+| `vendor/bin/pint --test` | Check formatting. |
+| `vendor/bin/phpstan analyse --no-progress` | Run Larastan at level 5. |
+| `composer test:coverage` | Run the suite and require 100% `app/` line coverage. |
+| `composer audit --locked --no-interaction` | Audit locked dependencies. |
+
+Tests need a dedicated PostgreSQL 18 role and database:
+
+```sql
+CREATE ROLE identity_service_test LOGIN CREATEDB NOSUPERUSER;
 ```
 
-To reset an account password, run:
+Set `.env.testing` from `.env.example` with a fresh `APP_KEY`, `TEST_DB_HOST` and `TEST_DB_PASSWORD`. The guard requires port `5432` and the `identity_service_test` database and role. CI requires exactly 100% line coverage for `app/`.
 
-```sh
-php artisan identity:admin:reset-password
-```
+## Deployment and operations
 
-Both commands prompt for account details and read passwords through hidden
-prompts with confirmation. Passwords are not command-line arguments. Bootstrap
-normalizes the email address, refuses to create a second enabled administrator,
-and serializes concurrent attempts. Each successful account change and its
-audit record commit together. The commands display completion status only;
-they never display account credentials or password values. See [the architecture map](docs/architecture.md)
-for the implementation paths.
+- Run as a non-root user on port 8080 behind TLS, and trust only explicit proxy ranges in `bootstrap/app.php`, never `*`.
+- Keep sessions and cache on separate Redis databases; `cache:clear` flushes its database and would sign everyone out.
+- Back up with `pg_dump`, keep `APP_KEY` outside the backup, and rotate it after a restore.
+- Use `/up` to decide restarts and `/ready` to decide traffic.
+- Publish by pushing a `vX.Y.Z` tag on `main`. The workflow runs CI and the container smoke test before creating the release; a manual dispatch only previews the notes.
 
-## Administrator login
+## License
 
-Administrators sign in at `/admin/login`. Only enabled administrator accounts
-can open the protected `/admin` page. Sessions are stored in Redis; changing an
-account password invalidates its existing sessions. Sign out with the
-dashboard's POST form.
-
-Login throttling is keyed twice: five attempts per minute per normalized email
-address and client address, and twenty-five attempts per minute per client
-address. A burst against one account therefore does not lock other
-administrators out, and spraying many accounts from one address is capped
-separately.
-
-## Account administration
-
-Active administrators can manage accounts at `/admin/users`: browse the
-paginated account list, create an account with an explicit role and initial
-password, view account details and audit history, and disable another account.
-The service prevents disabling the current administrator and the last enabled
-administrator. Account creation and disabling are recorded atomically in the
-administrative audit log. Role changes, account deletion, re-enabling, and
-public registration are not available in this version.
-
-## Production operations
-
-### Runtime configuration
-
-Build the application image from this repository and run it behind a TLS
-terminating reverse proxy on port `8080`. The container runs Apache as a
-non-root user and serves only Laravel's `public/` directory. Keep PostgreSQL 18
-and Redis on private networks reachable by the application. Set `APP_ENV` to
-`production`, `APP_DEBUG` to `false`, and `LOG_CHANNEL` to `stderr`. Supply a
-stable, randomly generated `APP_KEY` and PostgreSQL/Redis credentials through
-the deployment platform's secret facility. Never pass secrets as image build
-arguments or bake them into the image. Set `SESSION_DRIVER=redis`,
-`SESSION_ENCRYPT=true`, and `SESSION_SECURE_COOKIE=true`; the default idle
-session lifetime is 120 minutes. Serve the application only through HTTPS.
-Laravel must trust only the addresses or CIDRs of the actual reverse proxies so
-it can safely recognize the original HTTPS scheme. Add the proxy's explicit
-addresses to the existing `withMiddleware` callback in `bootstrap/app.php`:
-
-```php
-->withMiddleware(function (Middleware $middleware): void {
-    $middleware->trustProxies(at: ['10.20.0.0/16']);
-})
-```
-
-Replace the example CIDR with the deployment's verified proxy range; do not
-trust all addresses. Configure the proxy to forward the original scheme only
-after the trusted proxy list is set.
-
-The login form is served at `/admin/login`, the authenticated dashboard at
-`/admin/`, and login submissions are rate limited. The container smoke workflow
-builds the image and checks `/up`, `/ready`, and `/admin/login` in CI.
-
-Two health endpoints serve different purposes. `/up` is a liveness probe that
-only proves the PHP process is serving requests and deliberately never touches
-PostgreSQL or Redis. `/ready` is a readiness probe: it checks PostgreSQL and
-Redis and returns `503` when either is unavailable, so a load balancer or
-orchestrator can withhold traffic. Use `/up` for restart decisions and `/ready`
-for traffic decisions. Both expose status only, never connection details.
-
-Every response carries an `X-Request-Id` header, echoed from the request when the
-caller supplies a well-formed value and otherwise generated. Error reports log
-that identifier with the failing class, the exception chain, and the PostgreSQL
-SQLSTATE so an operator can correlate a user-visible failure with its log entry
-without recording messages, SQL, bindings, or request data.
-
-Redis holds sessions on the connection named by `SESSION_CONNECTION` while the
-cache store uses the separate `cache` connection and database
-(`REDIS_CACHE_DB`). Keep them on different databases. `php artisan cache:clear`
-issues `FLUSHDB` against the cache database, so sharing one database would delete
-every administrator session.
-
-### Database deployment and backup
-
-Before deploying a new application version, take a PostgreSQL backup and apply
-the committed migrations using the new image:
-
-```sh
-docker build --tag identity-service:deployment .
-pg_dump --format=custom --file=identity-service.dump --dbname="$PGDATABASE"
-docker run --rm --env-file /secure/runtime.env identity-service:deployment php artisan migrate --force
-```
-
-Supply PostgreSQL client connection settings (`PGHOST`, `PGPORT`, `PGUSER`,
-`PGPASSWORD`, and `PGDATABASE`) from the deployment's secret facility when
-running the database client commands. Store backups in access-controlled
-encrypted storage and verify restores on a separate database. To restore,
-provision an empty recovery database and run:
-
-```sh
-pg_restore --clean --if-exists --no-owner --dbname="$PGDATABASE" identity-service.dump
-```
-
-This replaces objects in the target database. Promote
-the new application only after migrations and health checks succeed. Keep the
-previous image available for rollback. If a migration is not compatible with
-the previous image, restore the corresponding database backup before rolling
-back application code.
-
-Redis holds encrypted Laravel sessions with a configured idle lifetime of 120
-minutes by default. Use a private Redis service with persistence and backups
-appropriate to the deployment's recovery objectives. A database restore can
-revert disabled-account state or password hashes, while restoring an old Redis
-snapshot can revive sessions. After restoring the database, point every
-application instance to a fresh, isolated Redis session namespace (or a new
-Redis instance/database with no prior session data) before bringing the
-application back into service. Also generate a new `APP_KEY`, deploy it to all
-instances, and remove any previous-key decryption fallback. This ensures
-restored account state cannot reuse old encrypted sessions; users must
-authenticate again. Do not restore the old Redis session data as part of this
-recovery.
-
-Preserve the same `APP_KEY` across normal deployments and rollbacks. Rotating
-it during ordinary releases makes existing encrypted session data unreadable,
-requiring users to authenticate again; coordinate rotations as deliberate
-security operations.
-
-### First administrator and password recovery
-
-After the database migrations are applied, create the first administrator from
-a trusted interactive shell in the application container:
-
-```sh
-docker exec -it <application-container> php artisan identity:admin:bootstrap
-```
-
-The command requests the name and email address visibly, then reads the
-password and its confirmation through hidden input. It does not accept a
-password argument. Run it only through a secured operator session. To reset an
-account password, use the same protected process:
-
-```sh
-docker exec -it <application-container> php artisan identity:admin:reset-password
-```
-
-The reset command also uses hidden confirmed input. Neither command prints
-passwords. If interactive access is unavailable, use a secured operator session
-or connect to the container's terminal; do not substitute credentials in
-command arguments or shell history. Account changes and their audit records
-are committed atomically.
-
-## Verification
-
-Run the checks used by the repository before proposing a change:
-
-```sh
-composer validate --strict
-vendor/bin/pint --test
-vendor/bin/phpstan analyse --no-progress
-composer test:coverage
-composer audit --locked --no-interaction
-```
-
-The coverage command runs the test suite and requires PCOV or Xdebug.
-The test suite targets a dedicated PostgreSQL 18 database named
-`identity_service_test`. Configure its connection using the test environment
-documented in [Contributing](CONTRIBUTING.md#test-database-safety). The test
-database guard validates the connection, host, and role before database setup.
-Do not point tests at a shared or production database. CI enforces 100% line
-coverage for all files under [app/](app/); see
-[Contributing](CONTRIBUTING.md#development-and-verification) and the
-[coverage verifier](scripts/verify-coverage.php).
-
-## Engineering references
-
-- [Architecture and feature map](docs/architecture.md)
-- [Code style](docs/code-style.md)
-- [Contributing](CONTRIBUTING.md)
-- [Agent guide](AGENTS.md)
+Project code is licensed under the [MIT license](LICENSE).
