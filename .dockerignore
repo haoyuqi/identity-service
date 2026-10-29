@@ -20,7 +20,6 @@ tests
 docs
 scripts
 README.md
-CONTRIBUTING.md
 AGENTS.md
 phpunit.xml
 phpstan.neon

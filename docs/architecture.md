@@ -139,6 +139,7 @@ Redis cookies after password reset and account disablement through the service.
 
 Keep each fact in one owning reference and link to it elsewhere. Update this
 document when implemented responsibilities or execution paths change. The
-[code style](code-style.md) owns naming and readability rules;
-[Contributing](../CONTRIBUTING.md) owns development, verification, and review
-requirements.
+[code style](code-style.md) owns naming and readability rules, and
+[AGENTS.md](../AGENTS.md) owns development, verification and review
+requirements. [README](../README.md) owns setup, operations and the
+administrator-facing behavior of the service.
