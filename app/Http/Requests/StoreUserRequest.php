@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\UserRole;
 use App\Models\User;
-use Closure;
+use App\Rules\PasswordBytes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -39,16 +39,7 @@ final class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255'],
             'role' => ['required', Rule::enum(UserRole::class)],
-            'password' => [
-                'required',
-                'string',
-                'min:12',
-                static function (string $attribute, mixed $value, Closure $fail): void {
-                    if (is_string($value) && strlen($value) > 72) {
-                        $fail('The password must not exceed 72 bytes.');
-                    }
-                },
-            ],
+            'password' => ['required', 'string', 'min:12', new PasswordBytes],
         ];
     }
 
