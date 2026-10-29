@@ -18,7 +18,6 @@ vendor
 node_modules
 tests
 docs
-scripts
 README.md
 AGENTS.md
 phpunit.xml

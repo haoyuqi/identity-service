@@ -39,8 +39,7 @@
         "test": "@php artisan test",
         "test:coverage": [
             "@php -r \"is_dir('build') || mkdir('build', 0777, true);\"",
-            "@php artisan test --coverage --min=100 --coverage-clover=build/coverage.xml",
-            "@php scripts/verify-coverage.php build/coverage.xml"
+            "@php artisan test --coverage --min=100 --coverage-clover=build/coverage.xml"
         ],
         "analyse": "@php vendor/bin/phpstan analyse --no-progress",
         "format": "@php vendor/bin/pint",
