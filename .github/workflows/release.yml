@@ -47,7 +47,11 @@ jobs:
     uses: ./.github/workflows/container-smoke.yml
 
   notes:
-    needs: validate
+    needs: [validate, checks, container-checks]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (github.event_name == 'workflow_dispatch' || (needs.checks.result == 'success' && needs.container-checks.result == 'success')) }}
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -59,6 +63,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
           RELEASE_EXPECTED_SHA: ${{ needs.validate.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES_TOKEN: ${{ secrets.RELEASE_NOTES_TOKEN }}
           RELEASE_NOTES_BASE_URL: ${{ secrets.RELEASE_NOTES_BASE_URL }}
           RELEASE_NOTES_MODEL: ${{ secrets.RELEASE_NOTES_MODEL }}
