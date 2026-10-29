@@ -2,6 +2,8 @@ FROM composer:2 AS composer
 
 FROM php:8.4-apache
 
+RUN php -r 'if (PHP_VERSION_ID < 80427) { fwrite(STDERR, "PHP 8.4.27 or newer is required." . PHP_EOL); exit(1); }'
+
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
 RUN apt-get update \
