@@ -18,10 +18,10 @@ concurrency:
 jobs:
   container-smoke:
     name: Build and smoke test application container
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18.6@sha256:3a4264520e121176619f54ff867d12774bc81e95e7b84db58d63bccdb6144b81
         env:
           POSTGRES_DB: identity_service
           POSTGRES_USER: identity_service
@@ -35,7 +35,7 @@ jobs:
           --health-timeout=5s
           --health-retries=5
       redis:
-        image: redis:7-alpine
+        image: redis:7.4.12-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
         ports:
           - 6379:6379
         options: >-
