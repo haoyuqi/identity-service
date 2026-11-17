@@ -18,6 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $trustedProxies = getenv('TRUSTED_PROXIES');
+
+        if ($trustedProxies !== false && $trustedProxies !== '') {
+            $middleware->trustProxies(at: $trustedProxies);
+        }
+
         // Registered last so it is the outermost middleware: the identifier exists before any
         // other middleware runs and is therefore available to error rendering and logging.
         $middleware->prepend(SecurityHeaders::class);

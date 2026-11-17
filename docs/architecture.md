@@ -31,6 +31,7 @@ and public token authentication are outside this service's session-only scope.
 | Session pages | [login](../resources/views/auth/login.blade.php), [dashboard](../resources/views/admin/dashboard.blade.php) |
 | Administrative account pages and actions | [account routes](../routes/web.php), [user controller](../app/Http/Controllers/Admin/UserController.php), [user policy](../app/Policies/UserPolicy.php), [account service](../app/Services/UserManagementService.php), [account views](../resources/views/admin/users) |
 | Runtime configuration | [database](../config/database.php), [session](../config/session.php), [environment example](../.env.example) |
+| Container image and optional dependency profiles | [Dockerfile](../Dockerfile), [Compose](../compose.yaml), [deployment guide](docker-deployment.md), [container smoke workflow](../.github/workflows/container-smoke.yml) |
 | Test setup and database guard | [test case](../tests/TestCase.php), [database safety guard](../tests/Support/TestDatabaseGuard.php), [PHPUnit configuration](../phpunit.xml) |
 | Health, persistence, schema, and audit tests | [health check](../tests/Feature/HealthCheckTest.php), [user model](../tests/Feature/UserModelTest.php), [account schema](../tests/Feature/AccountAuditSchemaTest.php), [audit model](../tests/Feature/AdminAuditLogTest.php), [administrator commands](../tests/Feature/AdministratorCommandsTest.php) |
 | Security response behavior | [security response tests](../tests/Feature/SecurityResponsesTest.php) |
@@ -141,9 +142,10 @@ Redis cookies after password reset and account disablement through the service.
   [.github/workflows/release.yml](../.github/workflows/release.yml): it validates
   tag ancestry, runs both [.github/workflows/ci.yml](../.github/workflows/ci.yml)
   and [.github/workflows/container-smoke.yml](../.github/workflows/container-smoke.yml)
-  on the tagged commit, generates bilingual release notes via
-  `.github/scripts/release-notes.py`, and publishes the GitHub release once all
-  checks pass. Generation starts after CI succeeds. Sources are the complete
+  on the tagged commit (including both amd64 and arm64 container smoke checks), generates bilingual release notes via
+  `.github/scripts/release-notes.py`, publishes a multi-architecture GHCR image,
+  and creates the GitHub release only after image publication. Generation starts
+  after CI succeeds. Sources are the complete
   titles and descriptions of merged PRs associated with commits in the actual
   tag range, plus full messages of unmatched commits, including merges. PRs
   are deduplicated; sources are neither compressed nor truncated. One model

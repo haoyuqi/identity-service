@@ -455,8 +455,9 @@ class WorkflowTest(unittest.TestCase):
                          .replace('||', 'or'))
             self.assertEqual(expected, eval(condition, {'__builtins__': {}}, {}))
         publish = text.split('  publish:\n', 1)[1]
-        self.assertIn('needs: [validate, checks, container-checks, notes]', publish)
+        self.assertIn('needs: [validate, checks, container-checks, notes, image]', publish)
         self.assertIn("if: github.event_name == 'push'", publish)
+        self.assertIn("ghcr.io/${{ github.repository }}:latest", text)
 
 
 class TagValidationTest(unittest.TestCase):
