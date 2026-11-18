@@ -75,7 +75,7 @@ Both hide the password input and never accept it as an argument. Each change com
 | `vendor/bin/phpstan analyse --no-progress` | Run Larastan at level 5. |
 | `composer test:coverage` | Run the suite and require 100% `app/` line coverage. |
 | `composer audit --locked --no-interaction` | Audit locked dependencies. |
-| `osv-scanner scan --lockfile composer.lock` | Scan locked dependencies with OSV-Scanner; CI runs it beside `composer audit`. |
+| `osv-scanner scan --lockfile composer.lock` | Scan locked dependencies with OSV-Scanner; CI adds it as a step after `composer audit` in the quality job. |
 
 Tests need a dedicated PostgreSQL 18 role and database:
 
