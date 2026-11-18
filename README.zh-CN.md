@@ -75,6 +75,7 @@ php artisan migrate
 | `vendor/bin/phpstan analyse --no-progress` | 以 Larastan level 5 执行静态分析。 |
 | `composer test:coverage` | 运行测试，并要求 `app/` 行覆盖率达到 100%。 |
 | `composer audit --locked --no-interaction` | 审计锁定版本的依赖。 |
+| `osv-scanner scan --lockfile composer.lock` | 使用 OSV-Scanner 扫描锁定版本的依赖；CI 在 quality 任务中于 `composer audit` 之后新增该步骤。 |
 
 测试需要独立的 PostgreSQL 18 角色与数据库：
 

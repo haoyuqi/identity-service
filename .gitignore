@@ -19,6 +19,7 @@
 /.zed
 /auth.json
 /node_modules
+/osv-audit.json
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
