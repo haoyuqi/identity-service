@@ -1,6 +1,7 @@
 *.log
 .DS_Store
 .env
+.env.compose
 .env.backup
 /.env.*
 !/.env.example

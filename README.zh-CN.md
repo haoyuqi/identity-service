@@ -87,11 +87,14 @@ CREATE ROLE identity_service_test LOGIN CREATEDB NOSUPERUSER;
 
 ## 部署与运维
 
+镜像、可选内置或外部 PostgreSQL/Redis、Compose 命令、升级及回滚说明见
+[Docker 部署指南](docs/docker-deployment.md)。
+
 - 以非 root 用户在 8080 端口运行并置于 TLS 之后，只信任 `bootstrap/app.php` 中明确列出的代理网段，不要使用 `*`。
 - 会话与缓存使用不同的 Redis 数据库；`cache:clear` 会清空所在数据库，共用会让所有管理员退出登录。
 - 用 `pg_dump` 备份，`APP_KEY` 不要放进备份，恢复后应轮换密钥。
 - `/up` 用于判断是否需要重启，`/ready` 用于决定是否接收流量。
-- 在 `main` 上推送 `vX.Y.Z` 标签即可发布。工作流会先运行 CI 与容器冒烟测试，再创建 Release；手动触发只预览说明。
+- 在 `main` 上推送 `vX.Y.Z` 标签即可发布。工作流会先运行 CI、双架构容器冒烟测试并发布 GHCR 镜像，再创建 Release；手动触发只预览说明。
 
 ## 许可证
 

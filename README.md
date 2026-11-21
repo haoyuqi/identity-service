@@ -87,11 +87,14 @@ Set `.env.testing` from `.env.example` with a fresh `APP_KEY`, `TEST_DB_HOST` an
 
 ## Deployment and operations
 
+For the image, optional bundled or external PostgreSQL/Redis, Compose commands,
+upgrades and rollback, see the [Docker deployment guide](docs/docker-deployment.md).
+
 - Run as a non-root user on port 8080 behind TLS, and trust only explicit proxy ranges in `bootstrap/app.php`, never `*`.
 - Keep sessions and cache on separate Redis databases; `cache:clear` flushes its database and would sign everyone out.
 - Back up with `pg_dump`, keep `APP_KEY` outside the backup, and rotate it after a restore.
 - Use `/up` to decide restarts and `/ready` to decide traffic.
-- Publish by pushing a `vX.Y.Z` tag on `main`. The workflow runs CI and the container smoke test before creating the release; a manual dispatch only previews the notes.
+- Publish by pushing a `vX.Y.Z` tag on `main`. The workflow runs CI, both architecture container smoke checks, publishes the GHCR image, then creates the release; a manual dispatch only previews the notes.
 
 ## License
 
