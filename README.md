@@ -90,7 +90,17 @@ Set `.env.testing` from `.env.example` with a fresh `APP_KEY`, `TEST_DB_HOST` an
 For the image, optional bundled or external PostgreSQL/Redis, Compose commands,
 upgrades and rollback, see the [Docker deployment guide](docs/docker-deployment.md).
 
-- Run as a non-root user on port 8080 behind TLS, and trust only explicit proxy ranges in `bootstrap/app.php`, never `*`.
+Copy `compose.env.example` to the ignored `.env`; Compose interpolates it and the
+app loads it through `env_file` (`COMPOSE_ENV_FILE` selects another path, and the
+entry is optional so CI can pass exported variables instead). `COMPOSE_PROFILES`
+chooses the dependencies: empty uses external PostgreSQL and Redis, while
+`database,redis` bundles both and equals `--profile database --profile redis`.
+For external services, set `POSTGRES_NETWORK_EXTERNAL`, `REDIS_NETWORK_EXTERNAL`
+and `INGRESS_NETWORK_EXTERNAL` with the corresponding `*_NETWORK` names so the
+app joins host-owned networks; on `ingress` it answers to `identity-upstream`
+for the reverse proxy.
+
+- Run as a non-root user on port 8080 behind TLS, and set `TRUSTED_PROXIES` to the exact reverse-proxy CIDR; never use `*`.
 - Keep sessions and cache on separate Redis databases; `cache:clear` flushes its database and would sign everyone out.
 - Back up with `pg_dump`, keep `APP_KEY` outside the backup, and rotate it after a restore.
 - Use `/up` to decide restarts and `/ready` to decide traffic.

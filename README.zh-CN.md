@@ -90,7 +90,9 @@ CREATE ROLE identity_service_test LOGIN CREATEDB NOSUPERUSER;
 镜像、可选内置或外部 PostgreSQL/Redis、Compose 命令、升级及回滚说明见
 [Docker 部署指南](docs/docker-deployment.md)。
 
-- 以非 root 用户在 8080 端口运行并置于 TLS 之后，只信任 `bootstrap/app.php` 中明确列出的代理网段，不要使用 `*`。
+把 `compose.env.example` 复制为被忽略的 `.env`；Compose 用它做变量替换，应用通过 `env_file` 加载（`COMPOSE_ENV_FILE` 可选择其他路径，缺失时仍可解析，便于 CI 使用导出的变量）。`COMPOSE_PROFILES` 为空表示使用外部 PostgreSQL/Redis，`database,redis` 表示内置两者。接入外部服务时设置 `POSTGRES_NETWORK_EXTERNAL`、`REDIS_NETWORK_EXTERNAL`、`INGRESS_NETWORK_EXTERNAL` 及对应的 `*_NETWORK` 名称；应用在 ingress 网络上以 `identity-upstream` 提供给反向代理。
+
+- 以非 root 用户在 8080 端口运行并置于 TLS 之后，把 `TRUSTED_PROXIES` 设置为精确的反向代理网段，不要使用 `*`。
 - 会话与缓存使用不同的 Redis 数据库；`cache:clear` 会清空所在数据库，共用会让所有管理员退出登录。
 - 用 `pg_dump` 备份，`APP_KEY` 不要放进备份，恢复后应轮换密钥。
 - `/up` 用于判断是否需要重启，`/ready` 用于决定是否接收流量。
