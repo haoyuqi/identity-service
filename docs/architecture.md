@@ -28,7 +28,7 @@ and public token authentication are outside this service's session-only scope.
 | Audit records | [AdminAuditLog](../app/Models/AdminAuditLog.php) |
 | Persistence schema | [initial migration](../database/migrations/0001_01_01_000000_create_users_table.php), [account and audit migration](../database/migrations/2026_10_23_000001_add_account_status_and_admin_audit_logs.php), [audit action constraint migration](../database/migrations/2026_10_24_000001_constrain_admin_audit_actions.php) |
 | Administrator session login | [session controller](../app/Http/Controllers/SessionController.php), [authentication service](../app/Services/AuthenticationService.php), [login request](../app/Http/Requests/LoginRequest.php), [active administrator middleware](../app/Http/Middleware/EnsureActiveAdministrator.php) |
-| Session pages | [login](../resources/views/auth/login.blade.php), [dashboard](../resources/views/admin/dashboard.blade.php) |
+| Session pages | [login](../resources/views/auth/login.blade.php), [auth stylesheet](../public/css/auth.css), [dashboard](../resources/views/admin/dashboard.blade.php) |
 | Administrative account pages and actions | [account routes](../routes/web.php), [user controller](../app/Http/Controllers/Admin/UserController.php), [user policy](../app/Policies/UserPolicy.php), [account service](../app/Services/UserManagementService.php), [account views](../resources/views/admin/users) |
 | Runtime configuration | [database](../config/database.php), [session](../config/session.php), [environment example](../.env.example) |
 | Container image and optional dependency profiles | [Dockerfile](../Dockerfile), [Compose](../compose.yaml), [deployment guide](docker-deployment.md), [container smoke workflow](../.github/workflows/container-smoke.yml) |
